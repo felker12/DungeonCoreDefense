@@ -25,13 +25,20 @@ export class DungeonCameraController {
     private readonly southWorldPadding: number;
     private readonly initialFitPadding: number;
     private readonly keyboardPanSpeed: number;
-    private readonly movementKeys: Record<"up" | "left" | "down" | "right", Input.Keyboard.Key>;
+    private readonly movementKeys: Record<
+        "up" | "left" | "down" | "right",
+        Input.Keyboard.Key
+    >;
     private worldBounds = new Geom.Rectangle();
     private isDragging = false;
     private targetZoom = 1;
     private isZooming = false;
-    private zoomAnchorX: number | null = null;
-    private zoomAnchorY: number | null = null;
+
+    // Anchor points for zooming toward cursor
+    private zoomAnchorWorldX: number | null = null;
+    private zoomAnchorWorldY: number | null = null;
+    private zoomAnchorScreenX: number | null = null;
+    private zoomAnchorScreenY: number | null = null;
 
     constructor(
         private readonly scene: Scene,
@@ -48,12 +55,7 @@ export class DungeonCameraController {
             focusBounds.width,
             focusBounds.height,
         );
-        // Reserve ample build space around the current dungeon so future map
-        // branches do not immediately collide with the camera boundary.
         this.worldPadding = options.worldPadding ?? 1400;
-        // Keep extra navigable space beneath the dungeon. At low zoom levels
-        // the viewport covers far more world units, so a symmetric boundary
-        // can make the dungeon appear pinned near the southern edge.
         this.southWorldPadding = options.southWorldPadding ?? 2800;
         this.initialFitPadding = options.initialFitPadding ?? 140;
         this.keyboardPanSpeed = options.keyboardPanSpeed ?? 650;
@@ -83,8 +85,10 @@ export class DungeonCameraController {
     private configureCamera(): void {
         const camera = this.scene.cameras.main;
         const fitZoom = Math.min(
-            camera.width / (this.focusBounds.width + this.initialFitPadding * 2),
-            camera.height / (this.focusBounds.height + this.initialFitPadding * 2),
+            camera.width /
+                (this.focusBounds.width + this.initialFitPadding * 2),
+            camera.height /
+                (this.focusBounds.height + this.initialFitPadding * 2),
             1,
         );
 
@@ -153,7 +157,7 @@ export class DungeonCameraController {
     }
 
     private handleWheel(
-        _pointer: Input.Pointer,
+        pointer: Input.Pointer,
         _gameObjects: GameObjects.GameObject[],
         _deltaX: number,
         deltaY: number,
@@ -162,11 +166,13 @@ export class DungeonCameraController {
 
         const camera = this.scene.cameras.main;
 
-        // Capture the world point at the viewport center once per zoom gesture.
-        // Repeated wheel events update the target zoom without moving the anchor.
+        // ONLY capture the anchor point at the start of a zoom gesture
         if (!this.isZooming) {
-            this.zoomAnchorX = camera.midPoint.x;
-            this.zoomAnchorY = camera.midPoint.y;
+            const worldPoint = camera.getWorldPoint(pointer.x, pointer.y);
+            this.zoomAnchorWorldX = worldPoint.x;
+            this.zoomAnchorWorldY = worldPoint.y;
+            this.zoomAnchorScreenX = pointer.x;
+            this.zoomAnchorScreenY = pointer.y;
         }
 
         const direction = deltaY > 0 ? -1 : 1;
@@ -175,7 +181,8 @@ export class DungeonCameraController {
             this.minZoom,
             this.maxZoom,
         );
-        this.isZooming = Math.abs(this.targetZoom - camera.zoom) > 0.001;
+
+        this.isZooming = true;
     }
 
     private handleResize(): void {
@@ -191,34 +198,26 @@ export class DungeonCameraController {
 
     private refreshWorldBounds(): void {
         const camera = this.scene.cameras.main;
-        const viewportWidth = camera.width / camera.zoom;
-        const viewportHeight = camera.height / camera.zoom;
 
-        // Build the bounds from independent edges. The previous implementation
-        // kept the top edge fixed while increasing the height at low zoom. That
-        // made the dungeon center an invalid camera position, so Phaser clamped
-        // the camera south and pushed the dungeon toward (or beyond) the top of
-        // the viewport.
-        //
-        // These viewport-aware edges guarantee that the dungeon center remains
-        // a legal camera center at every zoom level, while retaining additional
-        // travel space below the dungeon for future expansion.
-        const left = Math.min(
-            this.focusBounds.left - this.worldPadding,
-            this.focusBounds.centerX - viewportWidth / 2 - this.worldPadding,
-        );
-        const right = Math.max(
-            this.focusBounds.right + this.worldPadding,
-            this.focusBounds.centerX + viewportWidth / 2 + this.worldPadding,
-        );
-        const top = Math.min(
-            this.focusBounds.top - this.worldPadding,
-            this.focusBounds.centerY - viewportHeight / 2 - this.worldPadding,
-        );
-        const bottom = Math.max(
-            this.focusBounds.bottom + this.southWorldPadding,
-            this.focusBounds.centerY + viewportHeight / 2 + this.southWorldPadding,
-        );
+        const maximumViewportWidth = camera.width / this.minZoom;
+        const maximumViewportHeight = camera.height / this.minZoom;
+
+        const left =
+            this.focusBounds.left -
+            this.worldPadding -
+            maximumViewportWidth / 2;
+        const right =
+            this.focusBounds.right +
+            this.worldPadding +
+            maximumViewportWidth / 2;
+        const top =
+            this.focusBounds.top -
+            this.worldPadding -
+            maximumViewportHeight / 2;
+        const bottom =
+            this.focusBounds.bottom +
+            this.southWorldPadding +
+            maximumViewportHeight / 2;
 
         this.worldBounds.setTo(left, top, right - left, bottom - top);
 
@@ -234,37 +233,61 @@ export class DungeonCameraController {
         if (!this.isZooming) return;
 
         const camera = this.scene.cameras.main;
-        const anchorX = this.zoomAnchorX ?? camera.midPoint.x;
-        const anchorY = this.zoomAnchorY ?? camera.midPoint.y;
         const frameSeconds = Math.min(delta, 50) / 1000;
         const easing = 1 - Math.exp(-10 * frameSeconds);
-        const nextZoom = PhaserMath.Linear(camera.zoom, this.targetZoom, easing);
+        const nextZoom = PhaserMath.Linear(
+            camera.zoom,
+            this.targetZoom,
+            easing,
+        );
 
-        camera.setZoom(nextZoom);
-        this.refreshWorldBounds();
-        camera.centerOn(anchorX, anchorY);
+        if (
+            this.zoomAnchorWorldX !== null &&
+            this.zoomAnchorWorldY !== null &&
+            this.zoomAnchorScreenX !== null &&
+            this.zoomAnchorScreenY !== null
+        ) {
+            const halfW = camera.width / 2;
+            const halfH = camera.height / 2;
 
-        const zoomSettled = Math.abs(camera.zoom - this.targetZoom) < 0.001;
+            const targetScrollX =
+                this.zoomAnchorWorldX -
+                halfW -
+                (this.zoomAnchorScreenX - halfW) / nextZoom;
+            const targetScrollY =
+                this.zoomAnchorWorldY -
+                halfH -
+                (this.zoomAnchorScreenY - halfH) / nextZoom;
 
-        if (zoomSettled) {
+            camera.setZoom(nextZoom);
+            camera.scrollX = targetScrollX;
+            camera.scrollY = targetScrollY;
+        } else {
+            camera.setZoom(nextZoom);
+        }
+
+        if (Math.abs(camera.zoom - this.targetZoom) < 0.001) {
             camera.setZoom(this.targetZoom);
-            this.refreshWorldBounds();
-            camera.centerOn(anchorX, anchorY);
             this.isZooming = false;
-            this.zoomAnchorX = null;
-            this.zoomAnchorY = null;
+            this.clearZoomAnchor();
         }
     }
 
+    private clearZoomAnchor(): void {
+        this.zoomAnchorWorldX = null;
+        this.zoomAnchorWorldY = null;
+        this.zoomAnchorScreenX = null;
+        this.zoomAnchorScreenY = null;
+    }
+
     private cancelSmoothZoom(): void {
-        const camera = this.scene.cameras.main;
-        this.targetZoom = camera.zoom;
+        this.targetZoom = this.scene.cameras.main.zoom;
         this.isZooming = false;
-        this.zoomAnchorX = null;
-        this.zoomAnchorY = null;
+        this.clearZoomAnchor();
     }
 
     private setCursor(cursor: "default" | "grab" | "grabbing"): void {
         this.scene.game.canvas.style.cursor = cursor;
     }
 }
+

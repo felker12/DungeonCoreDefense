@@ -10,7 +10,10 @@ import { DungeonMapView } from "../views/DungeonMapView";
 import { WaveManager } from "../waves/WaveManager";
 import { RoomPopulationManager } from "../rooms/RoomPopulationManager";
 import type { EntityId } from "../components/DungeonData";
-import type { RoomPopulationSnapshot, ResourceSlotType } from "../rooms/RoomPopulationManager";
+import type {
+    RoomPopulationSnapshot,
+    ResourceSlotType,
+} from "../rooms/RoomPopulationManager";
 
 export interface RoomDetails {
     room: DungeonRoom;
@@ -32,18 +35,26 @@ export class DungeonScene extends Scene {
     }
 
     getRoomDetails(roomId: EntityId): RoomDetails | null {
-        const room = initialDungeon.rooms.find((candidate) => candidate.id === roomId);
+        const room = initialDungeon.rooms.find(
+            (candidate) => candidate.id === roomId,
+        );
         return room
-            ? { room: { ...room }, population: this.roomPopulation?.getSnapshot(roomId) ?? null }
+            ? {
+                  room: { ...room },
+                  population: this.roomPopulation?.getSnapshot(roomId) ?? null,
+              }
             : null;
     }
 
-    upgradeSelectedRoom(roomId: EntityId, slot: ResourceSlotType | "defender"): boolean {
+    upgradeSelectedRoom(
+        roomId: EntityId,
+        slot: ResourceSlotType | "defender",
+    ): boolean {
         const population = this.roomPopulation?.getSnapshot(roomId);
         if (!population) return false;
         return population.capacity.kind === "combat"
-            ? this.roomPopulation?.upgradeCombatSlot(roomId) ?? false
-            : this.roomPopulation?.upgradeResourceSlot(roomId, slot) ?? false;
+            ? (this.roomPopulation?.upgradeCombatSlot(roomId) ?? false)
+            : (this.roomPopulation?.upgradeResourceSlot(roomId, slot) ?? false);
     }
 
     create(): void {
@@ -53,6 +64,7 @@ export class DungeonScene extends Scene {
         this.cameraController = new DungeonCameraController(
             this,
             this.mapView.getMapBounds(),
+            { southWorldPadding: 4500 },
         );
         this.waveManager = new WaveManager(this, initialDungeon, {
             // Remove the seed when you want a different sequence each reload.
@@ -97,3 +109,4 @@ export class DungeonScene extends Scene {
         this.roomPopulation?.update(delta);
     }
 }
+
