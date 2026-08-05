@@ -23,7 +23,7 @@ export interface DungeonRoom {
     level: number;
     capacity: number;
     denizenIds: EntityId[];
+    deadEnd?: boolean;
     terminal?: boolean;
     allowedConnectionSides?: CardinalDirection[];
 }
-

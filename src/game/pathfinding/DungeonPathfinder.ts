@@ -4,9 +4,11 @@ import { DungeonRoomType } from "../components/mapComponents/DungeonRoom";
 
 export class DungeonPathfinder {
     private readonly routes: EntityId[][];
+    private readonly deadEndsByJunction: ReadonlyMap<EntityId, EntityId[]>;
 
     constructor(private readonly dungeon: DungeonMap) {
         this.routes = this.findEntranceToCoreRoutes();
+        this.deadEndsByJunction = this.findDeadEndsByJunction();
         if (this.routes.length === 0) {
             throw new Error("Dungeon has no route from its Entrance to its Core.");
         }
@@ -18,6 +20,50 @@ export class DungeonPathfinder {
 
     chooseRoute(random: () => number = Math.random): EntityId[] {
         return [...this.routes[Math.floor(random() * this.routes.length)]];
+    }
+
+    chooseRouteWithWrongTurn(
+        random: () => number = Math.random,
+        wrongTurnChance = 0.65,
+    ): EntityId[] {
+        const route = this.chooseRoute(random);
+        if (random() >= wrongTurnChance) return route;
+
+        const possibleTurns = route.flatMap((junctionId, routeIndex) =>
+            (this.deadEndsByJunction.get(junctionId) ?? []).map((deadEndId) => ({
+                deadEndId,
+                junctionId,
+                routeIndex,
+            })),
+        );
+        if (possibleTurns.length === 0) return route;
+
+        const turn = possibleTurns[Math.floor(random() * possibleTurns.length)];
+        return [
+            ...route.slice(0, turn.routeIndex + 1),
+            turn.deadEndId,
+            turn.junctionId,
+            ...route.slice(turn.routeIndex + 1),
+        ];
+    }
+
+    private findDeadEndsByJunction(): ReadonlyMap<EntityId, EntityId[]> {
+        const result = new Map<EntityId, EntityId[]>();
+        for (const room of this.dungeon.rooms) {
+            if (!room.deadEnd) continue;
+            const connection = this.dungeon.connections.find(
+                (candidate) =>
+                    candidate.fromRoomId === room.id || candidate.toRoomId === room.id,
+            );
+            if (!connection) continue;
+            const junctionId = connection.fromRoomId === room.id
+                ? connection.toRoomId
+                : connection.fromRoomId;
+            const deadEnds = result.get(junctionId) ?? [];
+            deadEnds.push(room.id);
+            result.set(junctionId, deadEnds);
+        }
+        return result;
     }
 
     private findEntranceToCoreRoutes(): EntityId[][] {

@@ -32,6 +32,7 @@ export class DungeonScene extends Scene {
             partySpawnInterval: 1400,
             minPartySize: 1,
             maxPartySize: 3,
+            wrongTurnChance: 0.65,
         });
 
         const handleRoomSelected = (room: DungeonRoom): void => {

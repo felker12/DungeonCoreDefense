@@ -41,5 +41,18 @@ export function validateDungeonMap(dungeon: DungeonMap): void {
     );
     if (coreConnections.length > 3) throw new Error("The terminal Core supports at most three connections.");
 
+    for (const room of dungeon.rooms.filter((candidate) => candidate.deadEnd)) {
+        if (room.type === DungeonRoomType.ENTRANCE || room.type === DungeonRoomType.CORE) {
+            throw new Error(`${room.name} cannot be marked as a dead end.`);
+        }
+        const connectionCount = dungeon.connections.filter(
+            (connection) =>
+                connection.fromRoomId === room.id || connection.toRoomId === room.id,
+        ).length;
+        if (connectionCount !== 1) {
+            throw new Error(`${room.name} is marked as a dead end but has ${connectionCount} connections.`);
+        }
+    }
+
     new DungeonPathfinder(dungeon);
 }
