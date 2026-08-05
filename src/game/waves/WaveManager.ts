@@ -55,6 +55,7 @@ export class WaveManager {
     private readonly quadraticWaveGrowth: number;
     private readonly wrongTurnChance: number;
     private readonly controllers = new Set<PartyController>();
+    private partiesWaitingToSpawn = 0;
     private status: WaveStatus = {
         waveNumber: 0,
         state: "waiting",
@@ -122,16 +123,17 @@ export class WaveManager {
             totalParties: partySizes.length,
             remainingParties: partySizes.length,
         };
+        this.partiesWaitingToSpawn = partySizes.length;
         this.emitStatus();
 
         let adventurerIndex = 0;
-        partySizes.forEach((partySize, partyIndex) => {
+        const partyPlans = partySizes.map((partySize, partyIndex) => {
             const firstAdventurerIndex = adventurerIndex;
             adventurerIndex += partySize;
-            this.scene.time.delayedCall(partyIndex * this.partySpawnInterval, () => {
-                if (!this.destroyed) this.spawnParty(partyIndex, partySize, firstAdventurerIndex);
-            });
+            return { partyIndex, partySize, firstAdventurerIndex };
         });
+
+        this.spawnPartiesSequentially(partyPlans);
         return true;
     }
 
@@ -157,7 +159,8 @@ export class WaveManager {
         const controller = new PartyController(this.scene, party, this.roomsById);
         this.controllers.add(controller);
 
-        this.status.state = "advancing";
+        this.partiesWaitingToSpawn -= 1;
+        this.status.state = this.partiesWaitingToSpawn > 0 ? "spawning" : "advancing";
         this.emitStatus();
         EventBus.emit("party-spawned", party);
         for (const adventurer of members) EventBus.emit("adventurer-spawned", { adventurer, route });
@@ -167,9 +170,38 @@ export class WaveManager {
             this.controllers.delete(controller);
             this.status.remainingAdventurers -= party.members.length;
             this.status.remainingParties -= 1;
-            if (this.status.remainingAdventurers === 0) this.status.state = "completed";
+            if (
+                this.status.remainingAdventurers === 0 &&
+                this.partiesWaitingToSpawn === 0
+            ) {
+                this.status.state = "completed";
+            }
             this.emitStatus();
         });
+    }
+
+    private spawnPartiesSequentially(
+        partyPlans: readonly {
+            partyIndex: number;
+            partySize: number;
+            firstAdventurerIndex: number;
+        }[],
+        planIndex = 0,
+    ): void {
+        if (this.destroyed || planIndex >= partyPlans.length) return;
+
+        const plan = partyPlans[planIndex];
+        this.spawnParty(
+            plan.partyIndex,
+            plan.partySize,
+            plan.firstAdventurerIndex,
+        );
+
+        if (planIndex + 1 < partyPlans.length) {
+            this.scene.time.delayedCall(this.partySpawnInterval, () => {
+                this.spawnPartiesSequentially(partyPlans, planIndex + 1);
+            });
+        }
     }
 
     private createAdventurer(index: number, entranceId: EntityId, partyId: EntityId): AdventurerData {
