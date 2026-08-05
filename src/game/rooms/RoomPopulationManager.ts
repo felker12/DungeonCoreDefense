@@ -27,6 +27,7 @@ export interface RoomPopulationSnapshot {
     recoveringGatherers: number;
     assignedDefenders: number;
     productionPerSecond: number;
+    denizens: readonly DenizenData[];
 }
 
 export class RoomPopulationManager {
@@ -167,6 +168,7 @@ export class RoomPopulationManager {
                 ? this.baseProductionPerSecond +
                   activeGatherers.reduce((sum, gatherer) => sum + gatherer.gatheringPower, 0)
                 : 0,
+            denizens: assigned.map((denizen) => ({ ...denizen })),
         };
     }
 

@@ -9,6 +9,13 @@ import { validateDungeonMap } from "../pathfinding/validateDungeonMap";
 import { DungeonMapView } from "../views/DungeonMapView";
 import { WaveManager } from "../waves/WaveManager";
 import { RoomPopulationManager } from "../rooms/RoomPopulationManager";
+import type { EntityId } from "../components/DungeonData";
+import type { RoomPopulationSnapshot, ResourceSlotType } from "../rooms/RoomPopulationManager";
+
+export interface RoomDetails {
+    room: DungeonRoom;
+    population: RoomPopulationSnapshot | null;
+}
 
 export class DungeonScene extends Scene {
     private mapView?: DungeonMapView;
@@ -22,6 +29,21 @@ export class DungeonScene extends Scene {
 
     startNextWave(): boolean {
         return this.waveManager?.startNextWave() ?? false;
+    }
+
+    getRoomDetails(roomId: EntityId): RoomDetails | null {
+        const room = initialDungeon.rooms.find((candidate) => candidate.id === roomId);
+        return room
+            ? { room: { ...room }, population: this.roomPopulation?.getSnapshot(roomId) ?? null }
+            : null;
+    }
+
+    upgradeSelectedRoom(roomId: EntityId, slot: ResourceSlotType | "defender"): boolean {
+        const population = this.roomPopulation?.getSnapshot(roomId);
+        if (!population) return false;
+        return population.capacity.kind === "combat"
+            ? this.roomPopulation?.upgradeCombatSlot(roomId) ?? false
+            : this.roomPopulation?.upgradeResourceSlot(roomId, slot) ?? false;
     }
 
     create(): void {
@@ -49,6 +71,10 @@ export class DungeonScene extends Scene {
             gathererRecoveryMs: 20_000,
             baseProductionPerSecond: 1,
         });
+        for (const room of initialDungeon.rooms) {
+            const snapshot = this.roomPopulation.getSnapshot(room.id);
+            if (snapshot) EventBus.emit("room-population-changed", snapshot);
+        }
 
         const handleRoomSelected = (room: DungeonRoom): void => {
             this.mapView?.selectRoom(room.id);

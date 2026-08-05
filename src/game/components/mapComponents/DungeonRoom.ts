@@ -45,3 +45,16 @@ export interface DungeonRoom {
     terminal?: boolean;
     allowedConnectionSides?: CardinalDirection[];
 }
+
+export function getRoomTypeLabel(type: DungeonRoomType): string {
+    switch (type) {
+        case DungeonRoomType.ENTRANCE:
+            return "Entrance";
+        case DungeonRoomType.CORE:
+            return "Dungeon Core";
+        case DungeonRoomType.GUARD:
+            return "Guard Room";
+        case DungeonRoomType.PRODUCTION:
+            return "Resource Room";
+    }
+}

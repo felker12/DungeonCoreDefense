@@ -53,8 +53,7 @@ export const DenizenStatus = {
     RECOVERING: "recovering",
 } as const;
 
-export type DenizenStatus =
-    (typeof DenizenStatus)[keyof typeof DenizenStatus];
+export type DenizenStatus = (typeof DenizenStatus)[keyof typeof DenizenStatus];
 
 export interface DenizenData extends EntityData {
     type: DenizenType;
@@ -66,3 +65,4 @@ export interface DenizenData extends EntityData {
     gatheringPower: number;
     recoveryRemainingMs: number;
 }
+
