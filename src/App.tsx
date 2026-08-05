@@ -8,6 +8,8 @@ const INITIAL_STATUS: WaveStatus = {
     state: "waiting",
     totalAdventurers: 0,
     remainingAdventurers: 0,
+    totalParties: 0,
+    remainingParties: 0,
 };
 
 function App() {
@@ -44,6 +46,9 @@ function App() {
                 <strong>Wave {wave.waveNumber || "—"}</strong>
                 <div style={{ margin: "8px 0 12px", color: "#d6cadd" }}>
                     {wave.state} · {wave.remainingAdventurers}/{wave.totalAdventurers} remaining
+                </div>
+                <div style={{ margin: "-6px 0 12px", color: "#a99bb2", fontSize: 14 }}>
+                    {wave.remainingParties}/{wave.totalParties} parties remaining
                 </div>
                 <button
                     type="button"

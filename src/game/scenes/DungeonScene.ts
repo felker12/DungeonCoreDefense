@@ -29,6 +29,9 @@ export class DungeonScene extends Scene {
         this.waveManager = new WaveManager(this, initialDungeon, {
             // Remove the seed when you want a different sequence each reload.
             seed: 1337,
+            partySpawnInterval: 1400,
+            minPartySize: 1,
+            maxPartySize: 3,
         });
 
         const handleRoomSelected = (room: DungeonRoom): void => {

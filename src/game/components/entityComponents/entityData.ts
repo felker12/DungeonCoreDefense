@@ -28,6 +28,7 @@ export type AdventurerClass =
 
 export interface AdventurerData extends EntityData {
     class: AdventurerClass;
+    partyId: EntityId;
     currentRoomId: EntityId | null;
     xpReward: number;
     essenceReward: number;
