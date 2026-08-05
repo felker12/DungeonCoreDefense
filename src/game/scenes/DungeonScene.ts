@@ -31,7 +31,12 @@ export class DungeonScene extends Scene {
             seed: 1337,
             partySpawnInterval: 1400,
             minPartySize: 1,
-            maxPartySize: 3,
+            startingMaxPartySize: 3,
+            maxPartySize: 10,
+            wavesPerPartySizeIncrease: 5,
+            startingWaveCapacity: 3,
+            linearWaveGrowth: 1.25,
+            quadraticWaveGrowth: 0.035,
             wrongTurnChance: 0.65,
         });
 

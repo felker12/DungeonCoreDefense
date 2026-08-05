@@ -8,4 +8,3 @@ export function createSeededRandom(seed: number): () => number {
         return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
     };
 }
-
