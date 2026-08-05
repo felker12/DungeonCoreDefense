@@ -137,13 +137,14 @@ export class DungeonCameraController {
     }
 
     private handleWheel(
-        pointer: Input.Pointer,
+        _pointer: Input.Pointer,
         _gameObjects: GameObjects.GameObject[],
         _deltaX: number,
         deltaY: number,
     ): void {
         const camera = this.scene.cameras.main;
-        const worldBeforeZoom = camera.getWorldPoint(pointer.x, pointer.y);
+        const centerX = camera.midPoint.x;
+        const centerY = camera.midPoint.y;
         const direction = deltaY > 0 ? -1 : 1;
         const nextZoom = PhaserMath.Clamp(
             camera.zoom + direction * this.zoomStep,
@@ -157,10 +158,10 @@ export class DungeonCameraController {
 
         camera.setZoom(nextZoom);
         this.refreshWorldBounds();
-
-        const worldAfterZoom = camera.getWorldPoint(pointer.x, pointer.y);
-        camera.scrollX += worldBeforeZoom.x - worldAfterZoom.x;
-        camera.scrollY += worldBeforeZoom.y - worldAfterZoom.y;
+        // Keep zooming from pushing the dungeon toward a viewport edge. The
+        // camera remains focused on the same world-space point while its
+        // visible area expands or contracts around that point.
+        camera.centerOn(centerX, centerY);
     }
 
     private handleResize(): void {
@@ -174,11 +175,13 @@ export class DungeonCameraController {
         const paddedWidth = this.focusBounds.width + this.worldPadding * 2;
         const paddedHeight = this.focusBounds.height + this.worldPadding * 2;
 
-        // Camera bounds must never be smaller than the visible world-space
-        // viewport. If they are, Phaser can clamp the camera away from the map
-        // on large screens or at the minimum zoom level.
-        const minimumWidth = camera.width / camera.zoom;
-        const minimumHeight = camera.height / camera.zoom;
+        // Keep a complete navigable margin outside the visible viewport even
+        // at minimum zoom. Merely matching the viewport size removes all pan
+        // range and can leave the dungeon unreachable after a resize or zoom.
+        const viewportWidth = camera.width / camera.zoom;
+        const viewportHeight = camera.height / camera.zoom;
+        const minimumWidth = viewportWidth + this.worldPadding * 2;
+        const minimumHeight = viewportHeight + this.worldPadding * 2;
         const width = Math.max(paddedWidth, minimumWidth);
         const height = Math.max(paddedHeight, minimumHeight);
 
