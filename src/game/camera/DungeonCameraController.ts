@@ -191,29 +191,36 @@ export class DungeonCameraController {
 
     private refreshWorldBounds(): void {
         const camera = this.scene.cameras.main;
-        const paddedWidth = this.focusBounds.width + this.worldPadding * 2;
-        const paddedHeight =
-            this.focusBounds.height +
-            this.worldPadding +
-            this.southWorldPadding;
-
-        // Keep a complete navigable margin outside the visible viewport even
-        // at minimum zoom. Merely matching the viewport size removes all pan
-        // range and can leave the dungeon unreachable after a resize or zoom.
         const viewportWidth = camera.width / camera.zoom;
         const viewportHeight = camera.height / camera.zoom;
-        const minimumWidth = viewportWidth + this.worldPadding * 2;
-        const minimumHeight =
-            viewportHeight + this.worldPadding + this.southWorldPadding;
-        const width = Math.max(paddedWidth, minimumWidth);
-        const height = Math.max(paddedHeight, minimumHeight);
 
-        this.worldBounds.setTo(
-            this.focusBounds.centerX - width / 2,
-            this.focusBounds.y - this.worldPadding,
-            width,
-            height,
+        // Build the bounds from independent edges. The previous implementation
+        // kept the top edge fixed while increasing the height at low zoom. That
+        // made the dungeon center an invalid camera position, so Phaser clamped
+        // the camera south and pushed the dungeon toward (or beyond) the top of
+        // the viewport.
+        //
+        // These viewport-aware edges guarantee that the dungeon center remains
+        // a legal camera center at every zoom level, while retaining additional
+        // travel space below the dungeon for future expansion.
+        const left = Math.min(
+            this.focusBounds.left - this.worldPadding,
+            this.focusBounds.centerX - viewportWidth / 2 - this.worldPadding,
         );
+        const right = Math.max(
+            this.focusBounds.right + this.worldPadding,
+            this.focusBounds.centerX + viewportWidth / 2 + this.worldPadding,
+        );
+        const top = Math.min(
+            this.focusBounds.top - this.worldPadding,
+            this.focusBounds.centerY - viewportHeight / 2 - this.worldPadding,
+        );
+        const bottom = Math.max(
+            this.focusBounds.bottom + this.southWorldPadding,
+            this.focusBounds.centerY + viewportHeight / 2 + this.southWorldPadding,
+        );
+
+        this.worldBounds.setTo(left, top, right - left, bottom - top);
 
         camera.setBounds(
             this.worldBounds.x,
