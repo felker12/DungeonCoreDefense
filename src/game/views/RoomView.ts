@@ -4,6 +4,7 @@ import { GameObjects, Scene } from "phaser";
 import type { DungeonRoom } from "../components/mapComponents/DungeonRoom";
 import { DungeonRoomType } from "../components/mapComponents/DungeonRoom";
 import { EventBus } from "../EventBus";
+import { formatRoomCapacity } from "../rooms/RoomCapacity";
 
 const ROOM_COLORS: Record<DungeonRoomType, number> = {
     [DungeonRoomType.ENTRANCE]: 0x4b5563,
@@ -40,10 +41,16 @@ export class RoomView extends GameObjects.Container {
             align: "center",
         }).setOrigin(0.5);
 
-        const details = new GameObjects.Text(scene, 0, 18, `Level ${room.level}`, {
+        const details = new GameObjects.Text(
+            scene,
+            0,
+            18,
+            `Level ${room.level}\n${formatRoomCapacity(room)}`,
+            {
             color: "#d6cadd",
             fontFamily: "Arial, sans-serif",
-            fontSize: "13px",
+            fontSize: "11px",
+            align: "center",
         }).setOrigin(0.5);
 
         this.add([this.background, name, details]);

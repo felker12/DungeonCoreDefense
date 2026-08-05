@@ -8,11 +8,13 @@ import { EventBus } from "../EventBus";
 import { validateDungeonMap } from "../pathfinding/validateDungeonMap";
 import { DungeonMapView } from "../views/DungeonMapView";
 import { WaveManager } from "../waves/WaveManager";
+import { RoomPopulationManager } from "../rooms/RoomPopulationManager";
 
 export class DungeonScene extends Scene {
     private mapView?: DungeonMapView;
     private cameraController?: DungeonCameraController;
     private waveManager?: WaveManager;
+    private roomPopulation?: RoomPopulationManager;
 
     constructor() {
         super("DungeonScene");
@@ -43,6 +45,10 @@ export class DungeonScene extends Scene {
             quadraticWaveGrowth: 0.035,
             wrongTurnChance: 0.65,
         });
+        this.roomPopulation = new RoomPopulationManager(initialDungeon, [], {
+            gathererRecoveryMs: 20_000,
+            baseProductionPerSecond: 1,
+        });
 
         const handleRoomSelected = (room: DungeonRoom): void => {
             this.mapView?.selectRoom(room.id);
@@ -53,10 +59,15 @@ export class DungeonScene extends Scene {
             EventBus.off("room-selected", handleRoomSelected);
             this.waveManager?.destroy();
             this.waveManager = undefined;
+            this.roomPopulation = undefined;
             this.cameraController?.destroy();
             this.cameraController = undefined;
         });
 
         EventBus.emit("current-scene-ready", this);
+    }
+
+    update(_time: number, delta: number): void {
+        this.roomPopulation?.update(delta);
     }
 }

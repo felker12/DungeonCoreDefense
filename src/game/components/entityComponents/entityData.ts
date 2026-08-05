@@ -41,8 +41,28 @@ export enum DenizenType {
     SKELETON = "skeleton",
 }
 
+export const DenizenRole = {
+    DEFENDER: "defender",
+    GATHERER: "gatherer",
+} as const;
+
+export type DenizenRole = (typeof DenizenRole)[keyof typeof DenizenRole];
+
+export const DenizenStatus = {
+    ACTIVE: "active",
+    RECOVERING: "recovering",
+} as const;
+
+export type DenizenStatus =
+    (typeof DenizenStatus)[keyof typeof DenizenStatus];
+
 export interface DenizenData extends EntityData {
     type: DenizenType;
+    role: DenizenRole;
+    status: DenizenStatus;
     assignedRoomId: EntityId | null;
     experience: number;
+    /** Production units contributed per second while active. */
+    gatheringPower: number;
+    recoveryRemainingMs: number;
 }

@@ -2,6 +2,7 @@ import type { DungeonMap } from "../components/mapComponents/DungeonMap";
 import type { CardinalDirection, DungeonRoom } from "../components/mapComponents/DungeonRoom";
 import { DungeonRoomType } from "../components/mapComponents/DungeonRoom";
 import { DungeonPathfinder } from "./DungeonPathfinder";
+import { createInitialRoomCapacity } from "../rooms/RoomCapacity";
 
 function connectionSide(from: DungeonRoom, to: DungeonRoom): CardinalDirection {
     if (from.position.x === to.position.x && from.position.y !== to.position.y) {
@@ -51,6 +52,23 @@ export function validateDungeonMap(dungeon: DungeonMap): void {
         ).length;
         if (connectionCount !== 1) {
             throw new Error(`${room.name} is marked as a dead end but has ${connectionCount} connections.`);
+        }
+    }
+
+    for (const room of dungeon.rooms) {
+        const capacity = createInitialRoomCapacity(room);
+        if (!capacity) continue;
+        if (capacity.kind === "combat") {
+            if (capacity.defenders < 0 || capacity.defenders > capacity.maxDefenders) {
+                throw new Error(`${room.name} has invalid defender capacity.`);
+            }
+        } else if (
+            capacity.gatherers < 0 ||
+            capacity.gatherers > capacity.maxGatherers ||
+            capacity.defenders < 0 ||
+            capacity.defenders > capacity.maxDefenders
+        ) {
+            throw new Error(`${room.name} has invalid resource-room capacity.`);
         }
     }
 

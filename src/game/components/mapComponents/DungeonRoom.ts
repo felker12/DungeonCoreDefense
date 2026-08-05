@@ -14,6 +14,22 @@ export type DungeonRoomType =
 
 export type CardinalDirection = "north" | "east" | "south" | "west";
 
+export interface CombatRoomCapacity {
+    kind: "combat";
+    defenders: number;
+    maxDefenders: number;
+}
+
+export interface ResourceRoomCapacity {
+    kind: "resource";
+    gatherers: number;
+    maxGatherers: number;
+    defenders: number;
+    maxDefenders: number;
+}
+
+export type RoomCapacity = CombatRoomCapacity | ResourceRoomCapacity;
+
 export interface DungeonRoom {
     id: EntityId;
     name: string;
@@ -21,7 +37,9 @@ export interface DungeonRoom {
     position: Position;
     size: Size;
     level: number;
-    capacity: number;
+    /** Legacy map field. New population rules use populationCapacity. */
+    capacity?: number;
+    populationCapacity?: RoomCapacity;
     denizenIds: EntityId[];
     deadEnd?: boolean;
     terminal?: boolean;
