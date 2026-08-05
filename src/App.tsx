@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { PhaserGame } from "./PhaserGame";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { PhaserGame, type IRefPhaserGame } from "./PhaserGame";
 import { EventBus } from "./game/EventBus";
+import { DungeonScene } from "./game/scenes/DungeonScene";
 import type { WaveStatus } from "./game/waves/WaveManager";
 
 const INITIAL_STATUS: WaveStatus = {
@@ -14,6 +15,8 @@ const INITIAL_STATUS: WaveStatus = {
 
 function App() {
     const [wave, setWave] = useState(INITIAL_STATUS);
+    const [sceneReady, setSceneReady] = useState(false);
+    const phaserRef = useRef<IRefPhaserGame>(null);
 
     useEffect(() => {
         const handleStatus = (status: WaveStatus): void => setWave(status);
@@ -24,10 +27,16 @@ function App() {
     }, []);
 
     const waveActive = wave.state === "spawning" || wave.state === "advancing";
+    const handleSceneReady = useCallback((): void => setSceneReady(true), []);
+
+    const startNextWave = (): void => {
+        const scene = phaserRef.current?.scene;
+        if (scene instanceof DungeonScene) scene.startNextWave();
+    };
 
     return (
         <main id="app" style={{ position: "relative", width: "100vw", height: "100vh" }}>
-            <PhaserGame />
+            <PhaserGame ref={phaserRef} currentActiveScene={handleSceneReady} />
             <section
                 style={{
                     position: "absolute",
@@ -52,20 +61,24 @@ function App() {
                 </div>
                 <button
                     type="button"
-                    disabled={waveActive}
-                    onClick={() => EventBus.emit("start-next-wave")}
+                    disabled={!sceneReady || waveActive}
+                    onClick={startNextWave}
                     style={{
                         width: "100%",
                         padding: "9px 12px",
                         border: 0,
                         borderRadius: 8,
                         color: "#17111e",
-                        background: waveActive ? "#766d7d" : "#ffd166",
-                        cursor: waveActive ? "not-allowed" : "pointer",
+                        background: !sceneReady || waveActive ? "#766d7d" : "#ffd166",
+                        cursor: !sceneReady || waveActive ? "not-allowed" : "pointer",
                         fontWeight: 700,
                     }}
                 >
-                    {wave.waveNumber === 0 ? "Start First Wave" : "Start Next Wave"}
+                    {!sceneReady
+                        ? "Loading Dungeon…"
+                        : wave.waveNumber === 0
+                          ? "Start First Wave"
+                          : "Start Next Wave"}
                 </button>
             </section>
         </main>

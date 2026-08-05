@@ -18,6 +18,10 @@ export class DungeonScene extends Scene {
         super("DungeonScene");
     }
 
+    startNextWave(): boolean {
+        return this.waveManager?.startNextWave() ?? false;
+    }
+
     create(): void {
         this.cameras.main.setBackgroundColor("#111018");
         validateDungeonMap(initialDungeon);
@@ -45,13 +49,8 @@ export class DungeonScene extends Scene {
         };
 
         EventBus.on("room-selected", handleRoomSelected);
-        const handleStartNextWave = (): void => {
-            this.waveManager?.startNextWave();
-        };
-        EventBus.on("start-next-wave", handleStartNextWave);
         this.events.once("shutdown", () => {
             EventBus.off("room-selected", handleRoomSelected);
-            EventBus.off("start-next-wave", handleStartNextWave);
             this.waveManager?.destroy();
             this.waveManager = undefined;
             this.cameraController?.destroy();

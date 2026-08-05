@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useLayoutEffect, useRef } from "react";
+import { forwardRef, useLayoutEffect, useRef } from "react";
 import StartGame from "./game/main";
 import { EventBus } from "./game/EventBus";
 
@@ -16,27 +16,6 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(
         const game = useRef<Phaser.Game | null>(null);
 
         useLayoutEffect(() => {
-            game.current ??= StartGame("game-container");
-
-            if (typeof ref === "function") {
-                ref({ game: game.current, scene: null });
-            } else if (ref) {
-                ref.current = { game: game.current, scene: null };
-            }
-
-            return () => {
-                game.current?.destroy(true);
-                game.current = null;
-
-                if (typeof ref === "function") {
-                    ref({ game: null, scene: null });
-                } else if (ref) {
-                    ref.current = { game: null, scene: null };
-                }
-            };
-        }, [ref]);
-
-        useEffect(() => {
             const handleSceneReady = (scene: Phaser.Scene): void => {
                 currentActiveScene?.(scene);
 
@@ -47,9 +26,27 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(
                 }
             };
 
+            // DungeonScene can finish creating synchronously while Phaser starts,
+            // so subscribe before constructing the game.
             EventBus.on("current-scene-ready", handleSceneReady);
+            game.current ??= StartGame("game-container");
+
+            if (typeof ref === "function") {
+                ref({ game: game.current, scene: null });
+            } else if (ref) {
+                ref.current = { game: game.current, scene: null };
+            }
+
             return () => {
                 EventBus.off("current-scene-ready", handleSceneReady);
+                game.current?.destroy(true);
+                game.current = null;
+
+                if (typeof ref === "function") {
+                    ref({ game: null, scene: null });
+                } else if (ref) {
+                    ref.current = { game: null, scene: null };
+                }
             };
         }, [currentActiveScene, ref]);
 
