@@ -1,6 +1,6 @@
 // src/game/views/DungeonMapView.ts
 
-import { GameObjects, Scene } from "phaser";
+import { GameObjects, Geom, Scene } from "phaser";
 import type { DungeonMap } from "../components/mapComponents/DungeonMap";
 import { CorridorView } from "./CorridorView";
 import { RoomView } from "./RoomView";
@@ -31,11 +31,13 @@ export class DungeonMapView extends GameObjects.Container {
         }
     }
 
-    getMapBounds(): Phaser.Geom.Rectangle {
-        const roomBounds = [...this.roomViews.values()].map((view) => view.getBounds());
+    getMapBounds(): Geom.Rectangle {
+        const roomBounds = [...this.roomViews.values()].map((view) =>
+            view.getBounds(),
+        );
 
         if (roomBounds.length === 0) {
-            return new Phaser.Geom.Rectangle(0, 0, 1, 1);
+            return new Geom.Rectangle(0, 0, 1, 1);
         }
 
         const left = Math.min(...roomBounds.map((bounds) => bounds.left));
@@ -43,6 +45,7 @@ export class DungeonMapView extends GameObjects.Container {
         const right = Math.max(...roomBounds.map((bounds) => bounds.right));
         const bottom = Math.max(...roomBounds.map((bounds) => bounds.bottom));
 
-        return new Phaser.Geom.Rectangle(left, top, right - left, bottom - top);
+        return new Geom.Rectangle(left, top, right - left, bottom - top);
     }
 }
+

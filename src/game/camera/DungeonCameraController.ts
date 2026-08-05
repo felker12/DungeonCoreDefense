@@ -1,4 +1,10 @@
-import { Math as PhaserMath, type Input, type Scene } from "phaser";
+import {
+    Geom,
+    Math as PhaserMath,
+    type GameObjects,
+    type Input,
+    type Scene,
+} from "phaser";
 
 interface DungeonCameraOptions {
     minZoom?: number;
@@ -11,27 +17,29 @@ export class DungeonCameraController {
     private readonly minZoom: number;
     private readonly maxZoom: number;
     private readonly zoomStep: number;
-    private readonly worldBounds: Phaser.Geom.Rectangle;
+    private readonly focusBounds: Geom.Rectangle;
+    private readonly worldPadding: number;
+    private worldBounds = new Geom.Rectangle();
     private isDragging = false;
 
     constructor(
         private readonly scene: Scene,
-        focusBounds: Phaser.Geom.Rectangle,
+        focusBounds: Geom.Rectangle,
         options: DungeonCameraOptions = {},
     ) {
         this.minZoom = options.minZoom ?? 0.5;
         this.maxZoom = options.maxZoom ?? 2;
         this.zoomStep = options.zoomStep ?? 0.12;
 
-        const padding = options.worldPadding ?? 320;
-        this.worldBounds = new Phaser.Geom.Rectangle(
-            focusBounds.x - padding,
-            focusBounds.y - padding,
-            focusBounds.width + padding * 2,
-            focusBounds.height + padding * 2,
+        this.focusBounds = new Geom.Rectangle(
+            focusBounds.x,
+            focusBounds.y,
+            focusBounds.width,
+            focusBounds.height,
         );
+        this.worldPadding = options.worldPadding ?? 320;
 
-        this.configureCamera(focusBounds);
+        this.configureCamera();
         this.bindInput();
     }
 
@@ -45,23 +53,17 @@ export class DungeonCameraController {
         this.setCursor("default");
     }
 
-    private configureCamera(focusBounds: Phaser.Geom.Rectangle): void {
+    private configureCamera(): void {
         const camera = this.scene.cameras.main;
-        camera.setBounds(
-            this.worldBounds.x,
-            this.worldBounds.y,
-            this.worldBounds.width,
-            this.worldBounds.height,
-        );
-
         const fitZoom = Math.min(
-            camera.width / this.worldBounds.width,
-            camera.height / this.worldBounds.height,
+            camera.width / (this.focusBounds.width + this.worldPadding * 2),
+            camera.height / (this.focusBounds.height + this.worldPadding * 2),
             1,
         );
 
         camera.setZoom(PhaserMath.Clamp(fitZoom, this.minZoom, this.maxZoom));
-        camera.centerOn(focusBounds.centerX, focusBounds.centerY);
+        this.refreshWorldBounds();
+        camera.centerOn(this.focusBounds.centerX, this.focusBounds.centerY);
     }
 
     private bindInput(): void {
@@ -99,7 +101,7 @@ export class DungeonCameraController {
 
     private handleWheel(
         pointer: Input.Pointer,
-        _gameObjects: Phaser.GameObjects.GameObject[],
+        _gameObjects: GameObjects.GameObject[],
         _deltaX: number,
         deltaY: number,
     ): void {
@@ -126,6 +128,29 @@ export class DungeonCameraController {
     private handleResize(): void {
         const camera = this.scene.cameras.main;
         camera.setSize(this.scene.scale.width, this.scene.scale.height);
+        this.refreshWorldBounds();
+    }
+
+    private refreshWorldBounds(): void {
+        const camera = this.scene.cameras.main;
+        const paddedWidth = this.focusBounds.width + this.worldPadding * 2;
+        const paddedHeight = this.focusBounds.height + this.worldPadding * 2;
+
+        // Camera bounds must never be smaller than the visible world-space
+        // viewport. If they are, Phaser can clamp the camera away from the map
+        // on large screens or at the minimum zoom level.
+        const minimumWidth = camera.width / camera.zoom;
+        const minimumHeight = camera.height / camera.zoom;
+        const width = Math.max(paddedWidth, minimumWidth);
+        const height = Math.max(paddedHeight, minimumHeight);
+
+        this.worldBounds.setTo(
+            this.focusBounds.centerX - width / 2,
+            this.focusBounds.centerY - height / 2,
+            width,
+            height,
+        );
+
         camera.setBounds(
             this.worldBounds.x,
             this.worldBounds.y,
@@ -138,3 +163,4 @@ export class DungeonCameraController {
         this.scene.game.canvas.style.cursor = cursor;
     }
 }
+
