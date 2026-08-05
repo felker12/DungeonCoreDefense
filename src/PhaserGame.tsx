@@ -1,5 +1,4 @@
 import { forwardRef, useEffect, useLayoutEffect, useRef } from "react";
-
 import StartGame from "./game/main";
 import { EventBus } from "./game/EventBus";
 
@@ -17,36 +16,22 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(
         const game = useRef<Phaser.Game | null>(null);
 
         useLayoutEffect(() => {
-            if (game.current === null) {
-                game.current = StartGame("game-container");
+            game.current ??= StartGame("game-container");
 
-                const initialRefValue: IRefPhaserGame = {
-                    game: game.current,
-                    scene: null,
-                };
-
-                if (typeof ref === "function") {
-                    ref(initialRefValue);
-                } else if (ref) {
-                    ref.current = initialRefValue;
-                }
+            if (typeof ref === "function") {
+                ref({ game: game.current, scene: null });
+            } else if (ref) {
+                ref.current = { game: game.current, scene: null };
             }
 
             return () => {
-                if (game.current) {
-                    game.current.destroy(true);
-                    game.current = null;
-                }
-
-                const clearedRefValue: IRefPhaserGame = {
-                    game: null,
-                    scene: null,
-                };
+                game.current?.destroy(true);
+                game.current = null;
 
                 if (typeof ref === "function") {
-                    ref(clearedRefValue);
+                    ref({ game: null, scene: null });
                 } else if (ref) {
-                    ref.current = clearedRefValue;
+                    ref.current = { game: null, scene: null };
                 }
             };
         }, [ref]);
@@ -55,25 +40,19 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(
             const handleSceneReady = (scene: Phaser.Scene): void => {
                 currentActiveScene?.(scene);
 
-                const updatedRefValue: IRefPhaserGame = {
-                    game: game.current,
-                    scene,
-                };
-
                 if (typeof ref === "function") {
-                    ref(updatedRefValue);
+                    ref({ game: game.current, scene });
                 } else if (ref) {
-                    ref.current = updatedRefValue;
+                    ref.current = { game: game.current, scene };
                 }
             };
 
             EventBus.on("current-scene-ready", handleSceneReady);
-
             return () => {
                 EventBus.off("current-scene-ready", handleSceneReady);
             };
         }, [currentActiveScene, ref]);
 
-        return <div id="game-container" />;
+        return <div id="game-container" style={{ width: "100vw", height: "100vh" }} />;
     },
 );
