@@ -11,6 +11,8 @@ interface DungeonCameraOptions {
     maxZoom?: number;
     zoomStep?: number;
     worldPadding?: number;
+    initialFitPadding?: number;
+    keyboardPanSpeed?: number;
 }
 
 export class DungeonCameraController {
@@ -19,6 +21,9 @@ export class DungeonCameraController {
     private readonly zoomStep: number;
     private readonly focusBounds: Geom.Rectangle;
     private readonly worldPadding: number;
+    private readonly initialFitPadding: number;
+    private readonly keyboardPanSpeed: number;
+    private readonly movementKeys: Record<"up" | "left" | "down" | "right", Input.Keyboard.Key>;
     private worldBounds = new Geom.Rectangle();
     private isDragging = false;
 
@@ -37,7 +42,17 @@ export class DungeonCameraController {
             focusBounds.width,
             focusBounds.height,
         );
-        this.worldPadding = options.worldPadding ?? 320;
+        // Reserve ample build space around the current dungeon so future map
+        // branches do not immediately collide with the camera boundary.
+        this.worldPadding = options.worldPadding ?? 1400;
+        this.initialFitPadding = options.initialFitPadding ?? 140;
+        this.keyboardPanSpeed = options.keyboardPanSpeed ?? 650;
+        this.movementKeys = this.scene.input.keyboard!.addKeys({
+            up: "W",
+            left: "A",
+            down: "S",
+            right: "D",
+        }) as Record<"up" | "left" | "down" | "right", Input.Keyboard.Key>;
 
         this.configureCamera();
         this.bindInput();
@@ -50,14 +65,16 @@ export class DungeonCameraController {
         this.scene.input.off("pointerupoutside", this.handlePointerUp, this);
         this.scene.input.off("wheel", this.handleWheel, this);
         this.scene.scale.off("resize", this.handleResize, this);
+        this.scene.events.off("update", this.handleUpdate, this);
+        for (const key of Object.values(this.movementKeys)) key.destroy();
         this.setCursor("default");
     }
 
     private configureCamera(): void {
         const camera = this.scene.cameras.main;
         const fitZoom = Math.min(
-            camera.width / (this.focusBounds.width + this.worldPadding * 2),
-            camera.height / (this.focusBounds.height + this.worldPadding * 2),
+            camera.width / (this.focusBounds.width + this.initialFitPadding * 2),
+            camera.height / (this.focusBounds.height + this.initialFitPadding * 2),
             1,
         );
 
@@ -74,7 +91,27 @@ export class DungeonCameraController {
         this.scene.input.on("pointerupoutside", this.handlePointerUp, this);
         this.scene.input.on("wheel", this.handleWheel, this);
         this.scene.scale.on("resize", this.handleResize, this);
+        this.scene.events.on("update", this.handleUpdate, this);
         this.setCursor("grab");
+    }
+
+    private handleUpdate(_time: number, delta: number): void {
+        const horizontal =
+            (this.movementKeys.right.isDown ? 1 : 0) -
+            (this.movementKeys.left.isDown ? 1 : 0);
+        const vertical =
+            (this.movementKeys.down.isDown ? 1 : 0) -
+            (this.movementKeys.up.isDown ? 1 : 0);
+
+        if (horizontal === 0 && vertical === 0) return;
+
+        const camera = this.scene.cameras.main;
+        const length = Math.hypot(horizontal, vertical);
+        const distance =
+            (this.keyboardPanSpeed * Math.min(delta, 50)) / 1000 / camera.zoom;
+
+        camera.scrollX += (horizontal / length) * distance;
+        camera.scrollY += (vertical / length) * distance;
     }
 
     private handlePointerDown(pointer: Input.Pointer): void {
