@@ -32,9 +32,7 @@ export class DungeonMapView extends GameObjects.Container {
     }
 
     getMapBounds(): Geom.Rectangle {
-        const roomBounds = [...this.roomViews.values()].map((view) =>
-            view.getBounds(),
-        );
+        const roomBounds = [...this.roomViews.values()].map((view) => view.getBounds());
 
         if (roomBounds.length === 0) {
             return new Geom.Rectangle(0, 0, 1, 1);
@@ -48,4 +46,3 @@ export class DungeonMapView extends GameObjects.Container {
         return new Geom.Rectangle(left, top, right - left, bottom - top);
     }
 }
-

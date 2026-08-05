@@ -2,12 +2,17 @@
 
 import type { EntityId, Position, Size } from "../DungeonData";
 
-export enum DungeonRoomType {
-    ENTRANCE = "entrance",
-    CORE = "core",
-    GUARD = "guard",
-    PRODUCTION = "production",
-}
+export const DungeonRoomType = {
+    ENTRANCE: "entrance",
+    CORE: "core",
+    GUARD: "guard",
+    PRODUCTION: "production",
+} as const;
+
+export type DungeonRoomType =
+    (typeof DungeonRoomType)[keyof typeof DungeonRoomType];
+
+export type CardinalDirection = "north" | "east" | "south" | "west";
 
 export interface DungeonRoom {
     id: EntityId;
@@ -18,4 +23,7 @@ export interface DungeonRoom {
     level: number;
     capacity: number;
     denizenIds: EntityId[];
+    terminal?: boolean;
+    allowedConnectionSides?: CardinalDirection[];
 }
+

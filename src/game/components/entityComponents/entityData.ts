@@ -16,12 +16,15 @@ export interface EntityData extends SpriteData {
     defense: number;
 }
 
-export enum AdventurerClass {
-    WARRIOR = "warrior",
-    ROGUE = "rogue",
-    CLERIC = "cleric",
-    ARCANIST = "arcanist",
-}
+export const AdventurerClass = {
+    WARRIOR: "warrior",
+    ROGUE: "rogue",
+    CLERIC: "cleric",
+    ARCANIST: "arcanist",
+} as const;
+
+export type AdventurerClass =
+    (typeof AdventurerClass)[keyof typeof AdventurerClass];
 
 export interface AdventurerData extends EntityData {
     class: AdventurerClass;
