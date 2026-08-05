@@ -27,7 +27,7 @@ export class DungeonCameraController {
         focusBounds: Geom.Rectangle,
         options: DungeonCameraOptions = {},
     ) {
-        this.minZoom = options.minZoom ?? 0.5;
+        this.minZoom = options.minZoom ?? 0.25;
         this.maxZoom = options.maxZoom ?? 2;
         this.zoomStep = options.zoomStep ?? 0.12;
 
@@ -119,6 +119,7 @@ export class DungeonCameraController {
         }
 
         camera.setZoom(nextZoom);
+        this.refreshWorldBounds();
 
         const worldAfterZoom = camera.getWorldPoint(pointer.x, pointer.y);
         camera.scrollX += worldBeforeZoom.x - worldAfterZoom.x;

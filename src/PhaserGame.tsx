@@ -50,6 +50,6 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(
             };
         }, [currentActiveScene, ref]);
 
-        return <div id="game-container" style={{ width: "100vw", height: "100vh" }} />;
+        return <div id="game-container" className="h-full w-full" />;
     },
 );

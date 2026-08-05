@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PhaserGame, type IRefPhaserGame } from "./PhaserGame";
-import { EventBus } from "./game/EventBus";
-import { DungeonScene } from "./game/scenes/DungeonScene";
-import type { WaveStatus } from "./game/waves/WaveManager";
 import type { DungeonRoom } from "./game/components/mapComponents/DungeonRoom";
 import { getRoomTypeLabel } from "./game/components/mapComponents/DungeonRoom";
-import type { RoomDetails } from "./game/scenes/DungeonScene";
+import { EventBus } from "./game/EventBus";
 import type { RoomPopulationSnapshot, ResourceSlotType } from "./game/rooms/RoomPopulationManager";
+import { DungeonScene, type RoomDetails } from "./game/scenes/DungeonScene";
+import type { WaveStatus } from "./game/waves/WaveManager";
 
 const INITIAL_STATUS: WaveStatus = {
     waveNumber: 0,
@@ -21,6 +20,7 @@ function App() {
     const [wave, setWave] = useState(INITIAL_STATUS);
     const [sceneReady, setSceneReady] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<RoomDetails | null>(null);
+    const [panelOpen, setPanelOpen] = useState(true);
     const phaserRef = useRef<IRefPhaserGame>(null);
 
     useEffect(() => {
@@ -36,7 +36,10 @@ function App() {
             const scene = phaserRef.current?.scene;
             if (scene instanceof DungeonScene) setSelectedRoom(scene.getRoomDetails(roomId));
         };
-        const handleSelected = (room: DungeonRoom): void => refreshRoom(room.id);
+        const handleSelected = (room: DungeonRoom): void => {
+            refreshRoom(room.id);
+            setPanelOpen(true);
+        };
         const handlePopulation = (snapshot: RoomPopulationSnapshot): void => {
             setSelectedRoom((current) => {
                 if (!current || current.room.id !== snapshot.roomId) return current;
@@ -56,68 +59,77 @@ function App() {
 
     const waveActive = wave.state === "spawning" || wave.state === "advancing";
     const handleSceneReady = useCallback((): void => setSceneReady(true), []);
-
-    const startNextWave = (): void => {
+    const getScene = (): DungeonScene | null => {
         const scene = phaserRef.current?.scene;
-        if (scene instanceof DungeonScene) scene.startNextWave();
+        return scene instanceof DungeonScene ? scene : null;
     };
 
     const upgradeRoom = (slot: ResourceSlotType | "defender"): void => {
-        const scene = phaserRef.current?.scene;
-        if (!(scene instanceof DungeonScene) || !selectedRoom) return;
-        scene.upgradeSelectedRoom(selectedRoom.room.id, slot);
+        if (selectedRoom) getScene()?.upgradeSelectedRoom(selectedRoom.room.id, slot);
     };
 
     return (
-        <main id="app" style={{ position: "relative", width: "100vw", height: "100vh" }}>
-            <PhaserGame ref={phaserRef} currentActiveScene={handleSceneReady} />
-            <section
-                style={{
-                    position: "absolute",
-                    left: 18,
-                    top: 18,
-                    zIndex: 20,
-                    minWidth: 220,
-                    padding: 16,
-                    border: "1px solid #6d5c7d",
-                    borderRadius: 12,
-                    color: "#fff",
-                    background: "rgba(20, 16, 27, 0.92)",
-                    fontFamily: "Arial, sans-serif",
-                }}
-            >
-                <strong>Wave {wave.waveNumber || "—"}</strong>
-                <div style={{ margin: "8px 0 12px", color: "#d6cadd" }}>
-                    {wave.state} · {wave.remainingAdventurers}/{wave.totalAdventurers} remaining
+        <main className="flex h-dvh min-h-0 w-screen flex-col overflow-hidden bg-stone-950 text-stone-100 lg:flex-row">
+            <section className="relative min-h-80 min-w-0 flex-1 overflow-hidden border-b border-violet-300/10 lg:border-r lg:border-b-0">
+                <PhaserGame ref={phaserRef} currentActiveScene={handleSceneReady} />
+                <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-white/10 bg-stone-950/75 px-3 py-2 text-xs text-stone-400 backdrop-blur">
+                    Drag to pan · Scroll to zoom
                 </div>
-                <div style={{ margin: "-6px 0 12px", color: "#a99bb2", fontSize: 14 }}>
-                    {wave.remainingParties}/{wave.totalParties} parties remaining
-                </div>
+            </section>
+
+            <aside className={`relative flex shrink-0 flex-col bg-[#15111c] transition-[width] duration-200 ${panelOpen ? "h-[44dvh] w-full lg:h-full lg:w-[clamp(340px,28vw,440px)]" : "h-14 w-full lg:h-full lg:w-14"}`}>
                 <button
                     type="button"
-                    disabled={!sceneReady || waveActive}
-                    onClick={startNextWave}
-                    style={{
-                        width: "100%",
-                        padding: "9px 12px",
-                        border: 0,
-                        borderRadius: 8,
-                        color: "#17111e",
-                        background: !sceneReady || waveActive ? "#766d7d" : "#ffd166",
-                        cursor: !sceneReady || waveActive ? "not-allowed" : "pointer",
-                        fontWeight: 700,
-                    }}
+                    className="absolute top-3 right-3 z-20 grid size-8 place-items-center rounded-md border border-white/10 bg-white/5 text-lg text-stone-300 hover:bg-white/10 hover:text-white"
+                    onClick={() => setPanelOpen((open) => !open)}
+                    aria-label={panelOpen ? "Collapse interface panel" : "Expand interface panel"}
                 >
-                    {!sceneReady
-                        ? "Loading Dungeon…"
-                        : wave.waveNumber === 0
-                          ? "Start First Wave"
-                          : "Start Next Wave"}
+                    {panelOpen ? "›" : "‹"}
                 </button>
-            </section>
-            {selectedRoom && (
-                <RoomDetailsPanel details={selectedRoom} onUpgrade={upgradeRoom} onClose={() => setSelectedRoom(null)} />
-            )}
+
+                {panelOpen && (
+                    <div className="flex min-h-0 flex-1 flex-col">
+                        <header className="border-b border-white/10 px-5 pt-5 pb-4 pr-14">
+                            <p className="text-xs font-bold tracking-[0.18em] text-amber-300 uppercase">Dungeon command</p>
+                            <div className="mt-3 flex items-end justify-between gap-3">
+                                <div>
+                                    <h1 className="text-xl font-bold">Wave {wave.waveNumber || "—"}</h1>
+                                    <p className="mt-1 text-sm capitalize text-stone-400">{wave.state}</p>
+                                </div>
+                                <div className="text-right text-xs text-stone-400">
+                                    <div><strong className="text-stone-200">{wave.remainingAdventurers}</strong> / {wave.totalAdventurers} adventurers</div>
+                                    <div className="mt-1"><strong className="text-stone-200">{wave.remainingParties}</strong> / {wave.totalParties} parties</div>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={!sceneReady || waveActive}
+                                onClick={() => getScene()?.startNextWave()}
+                                className="mt-4 w-full rounded-lg bg-amber-300 px-4 py-2.5 text-sm font-bold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-400"
+                            >
+                                {!sceneReady ? "Loading Dungeon…" : wave.waveNumber === 0 ? "Start First Wave" : "Start Next Wave"}
+                            </button>
+                        </header>
+
+                        <nav className="grid grid-cols-3 border-b border-white/10 px-3 pt-2 text-xs font-semibold">
+                            <button className="border-b-2 border-amber-300 px-2 py-3 text-amber-200">Room</button>
+                            <button disabled className="cursor-not-allowed px-2 py-3 text-stone-600">Denizens</button>
+                            <button disabled className="cursor-not-allowed px-2 py-3 text-stone-600">Shop</button>
+                        </nav>
+
+                        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                            {selectedRoom ? (
+                                <RoomDetailsPanel details={selectedRoom} onUpgrade={upgradeRoom} onClose={() => setSelectedRoom(null)} />
+                            ) : (
+                                <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.025] p-5 text-sm text-stone-400">
+                                    <h2 className="font-semibold text-stone-200">Select a room</h2>
+                                    <p className="mt-2 leading-6">Click a room on the map to inspect its level, population, production, and available slot upgrades.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </aside>
         </main>
     );
 }
@@ -134,31 +146,49 @@ function RoomDetailsPanel({ details, onUpgrade, onClose }: RoomDetailsPanelProps
     const { room, population } = details;
     const capacity = population?.capacity;
     return (
-        <aside style={{ position: "absolute", right: 18, top: 18, zIndex: 20, width: 300, padding: 18, border: "1px solid #6d5c7d", borderRadius: 12, color: "#fff", background: "rgba(20, 16, 27, 0.95)", fontFamily: "Arial, sans-serif" }}>
-            <button type="button" onClick={onClose} aria-label="Close room details" style={{ position: "absolute", right: 12, top: 10, border: 0, color: "#d6cadd", background: "transparent", cursor: "pointer", fontSize: 20 }}>×</button>
-            <div style={{ color: "#ffd166", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Selected room</div>
-            <h2 style={{ margin: "5px 0 2px", fontSize: 22 }}>{getRoomTypeLabel(room.type)}</h2>
-            <div style={{ color: "#a99bb2", fontSize: 13 }}>Level {room.level} · {room.deadEnd ? "Dead end" : room.terminal ? "Final room" : "Connected room"}</div>
+        <section>
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <p className="text-xs font-bold tracking-wider text-amber-300 uppercase">Selected room</p>
+                    <h2 className="mt-1 text-2xl font-bold">{getRoomTypeLabel(room.type)}</h2>
+                    <p className="mt-1 text-xs text-stone-500">Level {room.level} · {room.deadEnd ? "Dead end" : room.terminal ? "Final room" : "Connected room"}</p>
+                </div>
+                <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-xl text-stone-500 hover:bg-white/5 hover:text-white" aria-label="Close room details">×</button>
+            </div>
+
             {!population ? (
-                <p style={{ color: "#d6cadd" }}>This room does not support assigned denizens.</p>
+                <p className="mt-5 rounded-lg bg-white/5 p-4 text-sm text-stone-400">This room does not support assigned denizens.</p>
             ) : (
                 <>
-                    <div style={{ marginTop: 16, padding: 12, borderRadius: 9, background: "rgba(255,255,255,0.05)" }}>
-                        {capacity?.kind === "resource" && <div>Production: <strong>{population.productionPerSecond.toFixed(1)}/sec</strong></div>}
-                        {capacity?.kind === "resource" && <div style={{ marginTop: 7 }}>Gatherers: {population.assignedGatherers}/{capacity.gatherers} <span style={{ color: "#8e8495" }}>(max {capacity.maxGatherers})</span></div>}
-                        <div style={{ marginTop: 7 }}>Defenders: {population.assignedDefenders}/{capacity?.defenders} <span style={{ color: "#8e8495" }}>(max {capacity?.maxDefenders})</span></div>
-                        {population.recoveringGatherers > 0 && <div style={{ marginTop: 7, color: "#f2b36b" }}>Recovering gatherers: {population.recoveringGatherers}</div>}
+                    <div className="mt-5 space-y-3 rounded-xl border border-white/10 bg-white/[0.035] p-4 text-sm">
+                        {capacity?.kind === "resource" && <Stat label="Production" value={`${population.productionPerSecond.toFixed(1)}/sec`} />}
+                        {capacity?.kind === "resource" && <Stat label="Gatherers" value={`${population.assignedGatherers}/${capacity.gatherers} · max ${capacity.maxGatherers}`} />}
+                        <Stat label="Defenders" value={`${population.assignedDefenders}/${capacity?.defenders} · max ${capacity?.maxDefenders}`} />
+                        {population.recoveringGatherers > 0 && <Stat label="Recovering" value={`${population.recoveringGatherers} gatherers`} warning />}
                     </div>
-                    <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
-                        {capacity?.kind === "resource" && <button type="button" disabled={capacity.gatherers >= capacity.maxGatherers} onClick={() => onUpgrade("gatherer")} style={panelButtonStyle}>+ Gatherer slot</button>}
-                        <button type="button" disabled={!capacity || capacity.defenders >= capacity.maxDefenders} onClick={() => onUpgrade("defender")} style={panelButtonStyle}>+ Defender slot</button>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                        {capacity?.kind === "resource" && <UpgradeButton disabled={capacity.gatherers >= capacity.maxGatherers} onClick={() => onUpgrade("gatherer")}>+ Gatherer slot</UpgradeButton>}
+                        <UpgradeButton disabled={!capacity || capacity.defenders >= capacity.maxDefenders} onClick={() => onUpgrade("defender")}>+ Defender slot</UpgradeButton>
                     </div>
-                    <h3 style={{ margin: "18px 0 8px", fontSize: 14 }}>Denizens</h3>
-                    {population.denizens.length === 0 ? <div style={{ color: "#8e8495", fontSize: 13 }}>No denizens assigned.</div> : population.denizens.map((denizen) => <div key={denizen.id} style={{ marginTop: 6, textTransform: "capitalize" }}>{denizen.type} · {denizen.role} · {denizen.status}</div>)}
+                    <h3 className="mt-6 text-sm font-bold">Denizens</h3>
+                    {population.denizens.length === 0 ? (
+                        <p className="mt-2 text-sm text-stone-500">No denizens assigned.</p>
+                    ) : population.denizens.map((denizen) => (
+                        <button key={denizen.id} type="button" className="mt-2 flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-left text-sm capitalize hover:bg-white/5">
+                            <span>{denizen.type} · {denizen.role}</span>
+                            <span className="text-xs text-stone-500">{denizen.status}</span>
+                        </button>
+                    ))}
                 </>
             )}
-        </aside>
+        </section>
     );
 }
 
-const panelButtonStyle: React.CSSProperties = { flex: 1, padding: "8px", border: "1px solid #766782", borderRadius: 7, color: "#fff", background: "#44344f", cursor: "pointer", fontSize: 12, fontWeight: 700 };
+function Stat({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) {
+    return <div className="flex justify-between gap-4"><span className="text-stone-400">{label}</span><strong className={warning ? "text-orange-300" : "text-stone-100"}>{value}</strong></div>;
+}
+
+function UpgradeButton({ disabled, onClick, children }: { disabled: boolean; onClick: () => void; children: React.ReactNode }) {
+    return <button type="button" disabled={disabled} onClick={onClick} className="rounded-lg border border-violet-300/20 bg-violet-300/10 px-3 py-2 text-xs font-bold text-violet-100 hover:bg-violet-300/20 disabled:cursor-not-allowed disabled:opacity-35">{children}</button>;
+}
