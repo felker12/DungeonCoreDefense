@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { RoomDetailsPanel } from "./game/components/RoomDetailsPanel";
 import { PhaserGame, type IRefPhaserGame } from "./PhaserGame";
 import type { DungeonRoom } from "./game/components/mapComponents/DungeonRoom";
-import { getRoomTypeLabel } from "./game/components/mapComponents/DungeonRoom";
 import { EventBus } from "./game/EventBus";
 import type {
     RoomPopulationSnapshot,
@@ -84,17 +84,18 @@ function App() {
                     ref={phaserRef}
                     currentActiveScene={handleSceneReady}
                 />
-                <div className="map-controls-hint">
-                    <span>✥</span> Drag to pan <i /> Scroll to zoom
+                <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-5 flex items-center gap-2 rounded-lg border border-white/8 bg-[#0d0a11]/70 px-3 py-2 text-[10px] text-[#99919e] backdrop-blur-sm">
+                    <span className="text-[#b991d1]">✥</span> Drag to pan{" "}
+                    <i className="h-3 w-px bg-white/15" /> Scroll to zoom
                 </div>
             </section>
 
             <aside
-                className={`command-panel ${panelOpen ? "is-open" : "is-closed"}`}
+                className={`command-panel relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-l border-[#dab76c]/15 text-[#eee9df] shadow-[-18px_0_50px_rgba(0,0,0,.28)] ${panelOpen ? "is-open" : "is-closed"}`}
             >
                 <button
                     type="button"
-                    className="panel-toggle"
+                    className={`absolute right-3.5 z-20 grid size-8.5 cursor-pointer place-items-center rounded-lg border border-white/10 bg-white/5 p-0 text-[22px] leading-none text-[#c8bdcd] transition hover:border-[#ddb966]/35 hover:bg-[#ddb966]/10 hover:text-[#fff7e6] ${panelOpen ? "top-3.5" : "top-1/2 -translate-y-1/2"}`}
                     onClick={() => setPanelOpen((open) => !open)}
                     aria-label={
                         panelOpen
@@ -106,42 +107,44 @@ function App() {
                 </button>
 
                 {panelOpen && (
-                    <div className="panel-inner">
-                        <header className="command-header">
-                            <div className="command-kicker">
-                                <span className="command-rune">◆</span> Dungeon
-                                command
+                    <div className="relative z-1 flex min-h-0 flex-1 flex-col">
+                        <header className="border-b border-white/8 py-5 pr-14 pl-5.5">
+                            <div className="text-[11px] font-extrabold tracking-[.18em] text-[#d9b766] uppercase">
+                                <span className="mr-2 text-[#8f61c8]">◆</span>{" "}
+                                Dungeon command
                             </div>
-                            <div className="wave-summary">
-                                <div className="wave-title">
+                            <div className="mt-4 flex items-end justify-between gap-4.5">
+                                <div className="flex items-center gap-3">
                                     <span
-                                        className={`status-orb status-${wave.state}`}
+                                        className={`status-orb size-2.5 shrink-0 rounded-full border-2 border-[#5d5264] bg-[#27212d] status-${wave.state}`}
                                     />
                                     <div>
-                                        <h1>Wave {wave.waveNumber || "—"}</h1>
-                                        <p>{wave.state}</p>
+                                        <h1 className="m-0 font-serif text-[25px] leading-none tracking-tight text-[#fbf7ee]">
+                                            Wave {wave.waveNumber || "—"}
+                                        </h1>
+                                        <p className="mt-1.5 mb-0 text-xs text-[#908796] capitalize">
+                                            {wave.state}
+                                        </p>
                                     </div>
                                 </div>
-                                <div className="wave-metrics">
-                                    <div>
-                                        <strong>
-                                            {wave.remainingAdventurers}
-                                        </strong>
-                                        <span>of {wave.totalAdventurers}</span>
-                                        <small>Adventurers</small>
-                                    </div>
-                                    <div>
-                                        <strong>{wave.remainingParties}</strong>
-                                        <span>of {wave.totalParties}</span>
-                                        <small>Parties</small>
-                                    </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Metric
+                                        remaining={wave.remainingAdventurers}
+                                        total={wave.totalAdventurers}
+                                        label="Adventurers"
+                                    />
+                                    <Metric
+                                        remaining={wave.remainingParties}
+                                        total={wave.totalParties}
+                                        label="Parties"
+                                    />
                                 </div>
                             </div>
                             <button
                                 type="button"
                                 disabled={!sceneReady || waveActive}
                                 onClick={() => getScene()?.startNextWave()}
-                                className="wave-action"
+                                className="mt-4 flex w-full cursor-pointer items-center justify-between rounded-[10px] border border-[#f1cf78] bg-linear-to-br from-[#e3be64] to-[#c9953d] py-2.5 pr-3 pl-4 text-[13px] font-extrabold text-[#20170d] shadow-[0_8px_25px_rgba(180,126,38,.14),inset_0_1px_rgba(255,255,255,.35)] transition hover:-translate-y-px hover:brightness-110 disabled:cursor-not-allowed disabled:border-[#37313b] disabled:bg-none disabled:bg-[#27222b] disabled:text-[#716b74] disabled:shadow-none"
                             >
                                 <span>
                                     {!sceneReady
@@ -150,23 +153,29 @@ function App() {
                                           ? "Start First Wave"
                                           : "Start Next Wave"}
                                 </span>
-                                <b>→</b>
+                                <b className="text-lg leading-none">→</b>
                             </button>
                         </header>
 
-                        <nav className="panel-tabs">
-                            <button className="is-active">
+                        <nav className="grid grid-cols-3 border-b border-white/8 bg-black/15 px-3">
+                            <button className="panel-tab-active relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold text-[#e7cb89]">
                                 <span>▦</span>Room
                             </button>
-                            <button disabled>
+                            <button
+                                className="flex cursor-not-allowed items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold text-[#6f6874] opacity-50"
+                                disabled
+                            >
                                 <span>♟</span>Denizens
                             </button>
-                            <button disabled>
+                            <button
+                                className="flex cursor-not-allowed items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold text-[#6f6874] opacity-50"
+                                disabled
+                            >
                                 <span>◇</span>Shop
                             </button>
                         </nav>
 
-                        <div className="panel-content">
+                        <div className="panel-content min-h-0 flex-1 overflow-y-auto p-5">
                             {selectedRoom ? (
                                 <RoomDetailsPanel
                                     details={selectedRoom}
@@ -174,20 +183,26 @@ function App() {
                                     onClose={() => setSelectedRoom(null)}
                                 />
                             ) : (
-                                <div className="room-empty-state">
-                                    <div className="empty-room-icon">
+                                <div className="rounded-2xl border border-[#ddb966]/15 bg-linear-to-br from-white/4 to-white/1 p-6 text-center shadow-[inset_0_1px_rgba(255,255,255,.025)]">
+                                    <div className="empty-room-icon mx-auto mb-5 grid size-16 place-items-center rounded-[18px] border border-[#c99b43]/30 bg-[radial-gradient(circle,rgba(161,107,45,.18),rgba(92,56,116,.09))] text-[29px] text-[#c5a45d]">
                                         <span>⌗</span>
                                     </div>
-                                    <p className="eyebrow">Room inspection</p>
-                                    <h2>Select a room</h2>
-                                    <p>
+                                    <p className="m-0 text-[9px] font-extrabold tracking-[.18em] text-[#d9b766] uppercase">
+                                        Room inspection
+                                    </p>
+                                    <h2 className="my-2 font-serif text-[22px] text-[#f5efe4]">
+                                        Select a room
+                                    </h2>
+                                    <p className="mx-auto max-w-71.25 text-xs leading-relaxed text-[#948b99]">
                                         Click a room on the map to inspect its
                                         level, population, production, and
                                         available slot upgrades.
                                     </p>
-                                    <div className="empty-state-tip">
-                                        <span>✦</span> Choose any colored
-                                        chamber
+                                    <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/7 bg-black/15 px-2.5 py-1.5 text-[9px] text-[#7e7484]">
+                                        <span className="text-[#a979c6]">
+                                            ✦
+                                        </span>{" "}
+                                        Choose any colored chamber
                                     </div>
                                 </div>
                             )}
@@ -201,158 +216,23 @@ function App() {
 
 export default App;
 
-interface RoomDetailsPanelProps {
-    details: RoomDetails;
-    onUpgrade: (slot: ResourceSlotType | "defender") => void;
-    onClose: () => void;
-}
-
-function RoomDetailsPanel({
-    details,
-    onUpgrade,
-    onClose,
-}: RoomDetailsPanelProps) {
-    const { room, population } = details;
-    const capacity = population?.capacity;
-    return (
-        <section className="room-details">
-            <div className="room-details-heading">
-                <div>
-                    <p className="eyebrow">Selected room</p>
-                    <h2>{getRoomTypeLabel(room.type)}</h2>
-                    <div className="room-badges">
-                        <span>Level {room.level}</span>
-                        <span>
-                            {room.deadEnd
-                                ? "Dead end"
-                                : room.terminal
-                                  ? "Final room"
-                                  : "Connected room"}
-                        </span>
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="room-close"
-                    aria-label="Close room details"
-                >
-                    ×
-                </button>
-            </div>
-
-            {!population ? (
-                <p className="room-notice">
-                    This room does not support assigned denizens.
-                </p>
-            ) : (
-                <>
-                    <div className="room-stats">
-                        {capacity?.kind === "resource" && (
-                            <Stat
-                                label="Production"
-                                value={`${population.productionPerSecond.toFixed(1)}/sec`}
-                            />
-                        )}
-                        {capacity?.kind === "resource" && (
-                            <Stat
-                                label="Gatherers"
-                                value={`${population.assignedGatherers}/${capacity.gatherers} · max ${capacity.maxGatherers}`}
-                            />
-                        )}
-                        <Stat
-                            label="Defenders"
-                            value={`${population.assignedDefenders}/${capacity?.defenders} · max ${capacity?.maxDefenders}`}
-                        />
-                        {population.recoveringGatherers > 0 && (
-                            <Stat
-                                label="Recovering"
-                                value={`${population.recoveringGatherers} gatherers`}
-                                warning
-                            />
-                        )}
-                    </div>
-                    <div className="upgrade-grid">
-                        {capacity?.kind === "resource" && (
-                            <UpgradeButton
-                                disabled={
-                                    capacity.gatherers >= capacity.maxGatherers
-                                }
-                                onClick={() => onUpgrade("gatherer")}
-                            >
-                                + Gatherer slot
-                            </UpgradeButton>
-                        )}
-                        <UpgradeButton
-                            disabled={
-                                !capacity ||
-                                capacity.defenders >= capacity.maxDefenders
-                            }
-                            onClick={() => onUpgrade("defender")}
-                        >
-                            + Defender slot
-                        </UpgradeButton>
-                    </div>
-                    <h3 className="section-title">
-                        <span>♟</span> Denizens
-                    </h3>
-                    {population.denizens.length === 0 ? (
-                        <p className="denizen-empty">No denizens assigned.</p>
-                    ) : (
-                        population.denizens.map((denizen) => (
-                            <button
-                                key={denizen.id}
-                                type="button"
-                                className="denizen-row"
-                            >
-                                <span>
-                                    {denizen.type} · {denizen.role}
-                                </span>
-                                <small>{denizen.status}</small>
-                            </button>
-                        ))
-                    )}
-                </>
-            )}
-        </section>
-    );
-}
-
-function Stat({
+function Metric({
+    remaining,
+    total,
     label,
-    value,
-    warning = false,
 }: {
+    remaining: number;
+    total: number;
     label: string;
-    value: string;
-    warning?: boolean;
 }) {
     return (
-        <div className="stat-row">
-            <span>{label}</span>
-            <strong className={warning ? "is-warning" : ""}>{value}</strong>
+        <div className="grid min-w-17 grid-cols-[auto_auto] items-baseline rounded-lg border border-white/8 bg-white/4 px-2 py-1.5">
+            <strong className="text-base text-[#fff7e8]">{remaining}</strong>
+            <span className="ml-1 text-[9px] text-[#716a76]">of {total}</span>
+            <small className="col-span-2 mt-0.5 text-[8px] font-bold tracking-[.08em] text-[#9c929f] uppercase">
+                {label}
+            </small>
         </div>
-    );
-}
-
-function UpgradeButton({
-    disabled,
-    onClick,
-    children,
-}: {
-    disabled: boolean;
-    onClick: () => void;
-    children: React.ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            disabled={disabled}
-            onClick={onClick}
-            className="upgrade-button"
-        >
-            {children}
-        </button>
     );
 }
 
