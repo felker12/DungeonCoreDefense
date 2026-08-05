@@ -10,6 +10,7 @@ import type {
 } from "./game/rooms/RoomPopulationManager";
 import { DungeonScene, type RoomDetails } from "./game/scenes/DungeonScene";
 import type { WaveStatus } from "./game/waves/WaveManager";
+import type { ResourceSnapshot } from "./game/resources/ResourceManager";
 
 const INITIAL_STATUS: WaveStatus = {
     waveNumber: 0,
@@ -20,8 +21,17 @@ const INITIAL_STATUS: WaveStatus = {
     remainingParties: 0,
 };
 
+const INITIAL_RESOURCES: ResourceSnapshot = {
+    resources: {
+        essence: { id: "essence", value: 148, capacity: 250 },
+        stone: { id: "stone", value: 72, capacity: 150 },
+        supplies: { id: "supplies", value: 34, capacity: 100 },
+    },
+};
+
 function App() {
     const [wave, setWave] = useState(INITIAL_STATUS);
+    const [resourceState, setResourceState] = useState(INITIAL_RESOURCES);
     const [sceneReady, setSceneReady] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<RoomDetails | null>(null);
     const [panelOpen, setPanelOpen] = useState(true);
@@ -33,6 +43,15 @@ function App() {
         EventBus.on("wave-status-changed", handleStatus);
         return () => {
             EventBus.off("wave-status-changed", handleStatus);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleResources = (snapshot: ResourceSnapshot): void =>
+            setResourceState(snapshot);
+        EventBus.on("resources-changed", handleResources);
+        return () => {
+            EventBus.off("resources-changed", handleResources);
         };
     }, []);
 
@@ -83,9 +102,24 @@ function App() {
             <div className="map-column">
                 <ResourceBar
                     resources={[
-                        { id: "essence", label: "Essence", icon: "✦", value: 148, capacity: 250, tone: "violet" },
-                        { id: "stone", label: "Stone", icon: "◆", value: 72, capacity: 150, tone: "slate" },
-                        { id: "supplies", label: "Supplies", icon: "●", value: 34, capacity: 100, tone: "amber" },
+                        {
+                            ...resourceState.resources.essence,
+                            label: "Essence",
+                            icon: "✦",
+                            tone: "violet",
+                        },
+                        {
+                            ...resourceState.resources.stone,
+                            label: "Stone",
+                            icon: "◆",
+                            tone: "slate",
+                        },
+                        {
+                            ...resourceState.resources.supplies,
+                            label: "Supplies",
+                            icon: "●",
+                            tone: "amber",
+                        },
                     ]}
                     denizens={{ current: 6, capacity: 8 }}
                     dungeonPower={1240}
@@ -94,21 +128,29 @@ function App() {
                         waveRequired: 3,
                         waveDefeated: wave.waveNumber > 3,
                         costs: [
-                            { resource: "Stone", current: 72, required: 150 },
-                            { resource: "Essence", current: 148, required: 50 },
+                            {
+                                resource: "Stone",
+                                current: resourceState.resources.stone.value,
+                                required: 150,
+                            },
+                            {
+                                resource: "Essence",
+                                current: resourceState.resources.essence.value,
+                                required: 50,
+                            },
                         ],
                         roomCapacityReward: 2,
                     }}
                 />
                 <section className="game-viewport">
-                <PhaserGame
-                    ref={phaserRef}
-                    currentActiveScene={handleSceneReady}
-                />
-                <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-5 flex items-center gap-2 rounded-lg border border-white/8 bg-[#0d0a11]/70 px-3 py-2 text-[10px] text-[#99919e] backdrop-blur-sm">
-                    <span className="text-[#b991d1]">✥</span> Drag to pan{" "}
-                    <i className="h-3 w-px bg-white/15" /> Scroll to zoom
-                </div>
+                    <PhaserGame
+                        ref={phaserRef}
+                        currentActiveScene={handleSceneReady}
+                    />
+                    <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-5 flex items-center gap-2 rounded-lg border border-white/8 bg-[#0d0a11]/70 px-3 py-2 text-[10px] text-[#99919e] backdrop-blur-sm">
+                        <span className="text-[#b991d1]">✥</span> Drag to pan{" "}
+                        <i className="h-3 w-px bg-white/15" /> Scroll to zoom
+                    </div>
                 </section>
             </div>
 
@@ -257,3 +299,4 @@ function Metric({
         </div>
     );
 }
+

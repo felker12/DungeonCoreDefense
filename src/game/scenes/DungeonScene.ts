@@ -14,6 +14,7 @@ import type {
     RoomPopulationSnapshot,
     ResourceSlotType,
 } from "../rooms/RoomPopulationManager";
+import { ResourceManager } from "../resources/ResourceManager";
 
 export interface RoomDetails {
     room: DungeonRoom;
@@ -25,6 +26,7 @@ export class DungeonScene extends Scene {
     private cameraController?: DungeonCameraController;
     private waveManager?: WaveManager;
     private roomPopulation?: RoomPopulationManager;
+    private resourceManager?: ResourceManager;
     private initialCenterFrame?: number;
 
     constructor() {
@@ -95,6 +97,7 @@ export class DungeonScene extends Scene {
             gathererRecoveryMs: 20_000,
             baseProductionPerSecond: 1,
         });
+        this.resourceManager = new ResourceManager();
         for (const room of initialDungeon.rooms) {
             const snapshot = this.roomPopulation.getSnapshot(room.id);
             if (snapshot) EventBus.emit("room-population-changed", snapshot);
@@ -115,6 +118,7 @@ export class DungeonScene extends Scene {
             this.waveManager?.destroy();
             this.waveManager = undefined;
             this.roomPopulation = undefined;
+            this.resourceManager = undefined;
             this.cameraController?.destroy();
             this.cameraController = undefined;
         });
@@ -123,7 +127,16 @@ export class DungeonScene extends Scene {
     }
 
     update(_time: number, delta: number): void {
-        this.roomPopulation?.update(delta);
+        if (!this.waveManager?.isActive() || !this.roomPopulation) return;
+
+        this.roomPopulation.update(delta);
+        const productionPerSecond = initialDungeon.rooms.reduce(
+            (total, room) =>
+                total +
+                (this.roomPopulation?.getSnapshot(room.id)
+                    ?.productionPerSecond ?? 0),
+            0,
+        );
+        this.resourceManager?.update(delta, productionPerSecond);
     }
 }
-

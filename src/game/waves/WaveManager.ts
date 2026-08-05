@@ -73,7 +73,10 @@ export class WaveManager {
     ) {
         this.pathfinder = new DungeonPathfinder(dungeon);
         this.roomsById = new Map(dungeon.rooms.map((room) => [room.id, room]));
-        this.random = options.seed === undefined ? Math.random : createSeededRandom(options.seed);
+        this.random =
+            options.seed === undefined
+                ? Math.random
+                : createSeededRandom(options.seed);
         this.partySpawnInterval = options.partySpawnInterval ?? 1400;
         this.minPartySize = options.minPartySize ?? 1;
         this.startingMaxPartySize = options.startingMaxPartySize ?? 3;
@@ -88,17 +91,26 @@ export class WaveManager {
             this.startingMaxPartySize < this.minPartySize ||
             this.maxPartySize < this.startingMaxPartySize
         ) {
-            throw new Error("Party size options must describe a valid positive range.");
+            throw new Error(
+                "Party size options must describe a valid positive range.",
+            );
         }
-        if (!Number.isInteger(this.wavesPerPartySizeIncrease) || this.wavesPerPartySizeIncrease < 1) {
-            throw new Error("Waves per party-size increase must be a positive integer.");
+        if (
+            !Number.isInteger(this.wavesPerPartySizeIncrease) ||
+            this.wavesPerPartySizeIncrease < 1
+        ) {
+            throw new Error(
+                "Waves per party-size increase must be a positive integer.",
+            );
         }
         if (
             this.startingWaveCapacity < 1 ||
             this.linearWaveGrowth < 0 ||
             this.quadraticWaveGrowth < 0
         ) {
-            throw new Error("Wave-growth options must produce positive, non-decreasing waves.");
+            throw new Error(
+                "Wave-growth options must produce positive, non-decreasing waves.",
+            );
         }
         if (this.wrongTurnChance < 0 || this.wrongTurnChance > 1) {
             throw new Error("Wrong-turn chance must be between 0 and 1.");
@@ -107,14 +119,21 @@ export class WaveManager {
     }
 
     startNextWave(): boolean {
-        if (this.destroyed || this.status.state === "spawning" || this.status.state === "advancing") {
+        if (
+            this.destroyed ||
+            this.status.state === "spawning" ||
+            this.status.state === "advancing"
+        ) {
             return false;
         }
 
         const waveNumber = this.status.waveNumber + 1;
         const waveCapacity = this.getWaveCapacity(waveNumber);
         const maximumPartySize = this.getMaxPartySize(waveNumber);
-        const partySizes = this.partitionWaveCapacity(waveCapacity, maximumPartySize);
+        const partySizes = this.partitionWaveCapacity(
+            waveCapacity,
+            maximumPartySize,
+        );
         this.status = {
             waveNumber,
             state: "spawning",
@@ -137,33 +156,61 @@ export class WaveManager {
         return true;
     }
 
+    isActive(): boolean {
+        return (
+            this.status.state === "spawning" ||
+            this.status.state === "advancing"
+        );
+    }
+
     destroy(): void {
         this.destroyed = true;
         for (const controller of this.controllers) controller.destroy();
         this.controllers.clear();
     }
 
-    private spawnParty(partyIndex: number, partySize: number, firstAdventurerIndex: number): void {
+    private spawnParty(
+        partyIndex: number,
+        partySize: number,
+        firstAdventurerIndex: number,
+    ): void {
         const route = this.pathfinder.chooseRouteWithWrongTurn(
             this.random,
             this.wrongTurnChance,
         );
-        const entrance = this.dungeon.rooms.find((room) => room.type === DungeonRoomType.ENTRANCE);
+        const entrance = this.dungeon.rooms.find(
+            (room) => room.type === DungeonRoomType.ENTRANCE,
+        );
         if (!entrance) throw new Error("Cannot spawn without an Entrance.");
 
         const partyId = `wave-${this.status.waveNumber}-party-${partyIndex + 1}`;
         const members = Array.from({ length: partySize }, (_, memberIndex) =>
-            this.createAdventurer(firstAdventurerIndex + memberIndex, entrance.id, partyId),
+            this.createAdventurer(
+                firstAdventurerIndex + memberIndex,
+                entrance.id,
+                partyId,
+            ),
         );
-        const party: AdventurerParty = { id: partyId, waveNumber: this.status.waveNumber, members, route };
-        const controller = new PartyController(this.scene, party, this.roomsById);
+        const party: AdventurerParty = {
+            id: partyId,
+            waveNumber: this.status.waveNumber,
+            members,
+            route,
+        };
+        const controller = new PartyController(
+            this.scene,
+            party,
+            this.roomsById,
+        );
         this.controllers.add(controller);
 
         this.partiesWaitingToSpawn -= 1;
-        this.status.state = this.partiesWaitingToSpawn > 0 ? "spawning" : "advancing";
+        this.status.state =
+            this.partiesWaitingToSpawn > 0 ? "spawning" : "advancing";
         this.emitStatus();
         EventBus.emit("party-spawned", party);
-        for (const adventurer of members) EventBus.emit("adventurer-spawned", { adventurer, route });
+        for (const adventurer of members)
+            EventBus.emit("adventurer-spawned", { adventurer, route });
 
         void controller.advance().then(() => {
             if (this.destroyed) return;
@@ -204,8 +251,13 @@ export class WaveManager {
         }
     }
 
-    private createAdventurer(index: number, entranceId: EntityId, partyId: EntityId): AdventurerData {
-        const adventurerClass = CLASSES[Math.floor(this.random() * CLASSES.length)];
+    private createAdventurer(
+        index: number,
+        entranceId: EntityId,
+        partyId: EntityId,
+    ): AdventurerData {
+        const adventurerClass =
+            CLASSES[Math.floor(this.random() * CLASSES.length)];
         const level = 1 + Math.floor((this.status.waveNumber - 1) / 3);
         const maxHealth = 80 + level * 20;
         return {
@@ -246,7 +298,10 @@ export class WaveManager {
         );
     }
 
-    private partitionWaveCapacity(capacity: number, maximumPartySize: number): number[] {
+    private partitionWaveCapacity(
+        capacity: number,
+        maximumPartySize: number,
+    ): number[] {
         const sizes: number[] = [];
         let remaining = capacity;
         while (remaining > 0) {
