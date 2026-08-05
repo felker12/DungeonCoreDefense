@@ -69,15 +69,15 @@ function App() {
     };
 
     return (
-        <main className="flex h-dvh min-h-0 w-screen flex-col overflow-hidden bg-stone-950 text-stone-100 lg:flex-row">
-            <section className="relative min-h-80 min-w-0 flex-1 overflow-hidden border-b border-violet-300/10 lg:border-r lg:border-b-0">
+        <main className="game-shell-react bg-stone-950 text-stone-100">
+            <section className="game-viewport border-b border-violet-300/10 lg:border-r lg:border-b-0">
                 <PhaserGame ref={phaserRef} currentActiveScene={handleSceneReady} />
                 <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-white/10 bg-stone-950/75 px-3 py-2 text-xs text-stone-400 backdrop-blur">
                     Drag to pan · Scroll to zoom
                 </div>
             </section>
 
-            <aside className={`relative flex shrink-0 flex-col bg-[#15111c] transition-[width] duration-200 ${panelOpen ? "h-[44dvh] w-full lg:h-full lg:w-[clamp(340px,28vw,440px)]" : "h-14 w-full lg:h-full lg:w-14"}`}>
+            <aside className={`command-panel relative flex shrink-0 flex-col bg-[#15111c] transition-[width] duration-200 ${panelOpen ? "is-open" : "is-closed"}`}>
                 <button
                     type="button"
                     className="absolute top-3 right-3 z-20 grid size-8 place-items-center rounded-md border border-white/10 bg-white/5 text-lg text-stone-300 hover:bg-white/10 hover:text-white"

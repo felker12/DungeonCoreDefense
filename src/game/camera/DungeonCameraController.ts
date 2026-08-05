@@ -34,7 +34,7 @@ export class DungeonCameraController {
     private targetZoom = 1;
     private isZooming = false;
 
-    // Anchor points for zooming toward cursor
+    // Anchor points for zooming toward the cursor
     private zoomAnchorWorldX: number | null = null;
     private zoomAnchorWorldY: number | null = null;
     private zoomAnchorScreenX: number | null = null;
@@ -80,6 +80,45 @@ export class DungeonCameraController {
         this.scene.events.off("update", this.handleUpdate, this);
         for (const key of Object.values(this.movementKeys)) key.destroy();
         this.setCursor("default");
+    }
+
+    /**
+     * Re-center the initial view after the surrounding page layout has settled.
+     *
+     * This intentionally does not recalculate or change the zoom. Doing so here
+     * would interfere with the cursor-anchored zoom behavior used after startup.
+     */
+    public centerOnDungeon(): void {
+        const camera = this.scene.cameras.main;
+
+        this.cancelSmoothZoom();
+        this.refreshWorldBounds();
+        camera.centerOn(this.focusBounds.centerX, this.focusBounds.centerY);
+    }
+
+    /** Perform the one startup fit after the Phaser host has its final size. */
+    public initializeViewport(): void {
+        const camera = this.scene.cameras.main;
+
+        this.cancelSmoothZoom();
+        camera.setSize(this.scene.scale.width, this.scene.scale.height);
+
+        const fitZoom = Math.min(
+            camera.width /
+                (this.focusBounds.width + this.initialFitPadding * 2),
+            camera.height /
+                (this.focusBounds.height + this.initialFitPadding * 2),
+            1,
+        );
+
+        this.targetZoom = PhaserMath.Clamp(
+            fitZoom,
+            this.minZoom,
+            this.maxZoom,
+        );
+        camera.setZoom(this.targetZoom);
+        this.refreshWorldBounds();
+        camera.centerOn(this.focusBounds.centerX, this.focusBounds.centerY);
     }
 
     private configureCamera(): void {
@@ -166,14 +205,12 @@ export class DungeonCameraController {
 
         const camera = this.scene.cameras.main;
 
-        // ONLY capture the anchor point at the start of a zoom gesture
-        if (!this.isZooming) {
-            const worldPoint = camera.getWorldPoint(pointer.x, pointer.y);
-            this.zoomAnchorWorldX = worldPoint.x;
-            this.zoomAnchorWorldY = worldPoint.y;
-            this.zoomAnchorScreenX = pointer.x;
-            this.zoomAnchorScreenY = pointer.y;
-        }
+        // Capture the world point and screen position under the cursor
+        const worldPoint = camera.getWorldPoint(pointer.x, pointer.y);
+        this.zoomAnchorWorldX = worldPoint.x;
+        this.zoomAnchorWorldY = worldPoint.y;
+        this.zoomAnchorScreenX = pointer.x;
+        this.zoomAnchorScreenY = pointer.y;
 
         const direction = deltaY > 0 ? -1 : 1;
         this.targetZoom = PhaserMath.Clamp(
@@ -182,7 +219,7 @@ export class DungeonCameraController {
             this.maxZoom,
         );
 
-        this.isZooming = true;
+        this.isZooming = Math.abs(this.targetZoom - camera.zoom) > 0.001;
     }
 
     private handleResize(): void {
@@ -241,6 +278,9 @@ export class DungeonCameraController {
             easing,
         );
 
+        camera.setZoom(nextZoom);
+
+        // Adjust scroll coordinates so the world point under the cursor stays fixed
         if (
             this.zoomAnchorWorldX !== null &&
             this.zoomAnchorWorldY !== null &&
@@ -250,23 +290,19 @@ export class DungeonCameraController {
             const halfW = camera.width / 2;
             const halfH = camera.height / 2;
 
-            const targetScrollX =
+            camera.scrollX =
                 this.zoomAnchorWorldX -
                 halfW -
-                (this.zoomAnchorScreenX - halfW) / nextZoom;
-            const targetScrollY =
+                (this.zoomAnchorScreenX - halfW) / camera.zoom;
+            camera.scrollY =
                 this.zoomAnchorWorldY -
                 halfH -
-                (this.zoomAnchorScreenY - halfH) / nextZoom;
-
-            camera.setZoom(nextZoom);
-            camera.scrollX = targetScrollX;
-            camera.scrollY = targetScrollY;
-        } else {
-            camera.setZoom(nextZoom);
+                (this.zoomAnchorScreenY - halfH) / camera.zoom;
         }
 
-        if (Math.abs(camera.zoom - this.targetZoom) < 0.001) {
+        const zoomSettled = Math.abs(camera.zoom - this.targetZoom) < 0.001;
+
+        if (zoomSettled) {
             camera.setZoom(this.targetZoom);
             this.isZooming = false;
             this.clearZoomAnchor();
@@ -290,4 +326,3 @@ export class DungeonCameraController {
         this.scene.game.canvas.style.cursor = cursor;
     }
 }
-

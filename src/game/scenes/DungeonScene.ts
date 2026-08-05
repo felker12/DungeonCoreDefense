@@ -25,6 +25,7 @@ export class DungeonScene extends Scene {
     private cameraController?: DungeonCameraController;
     private waveManager?: WaveManager;
     private roomPopulation?: RoomPopulationManager;
+    private initialCenterFrame?: number;
 
     constructor() {
         super("DungeonScene");
@@ -61,11 +62,22 @@ export class DungeonScene extends Scene {
         this.cameras.main.setBackgroundColor("#111018");
         validateDungeonMap(initialDungeon);
         this.mapView = new DungeonMapView(this, initialDungeon);
+        this.mapView.setVisible(false);
         this.cameraController = new DungeonCameraController(
             this,
             this.mapView.getMapBounds(),
             { southWorldPadding: 4500 },
         );
+
+        // The explicit CSS grid gives Phaser a stable map cell. Wait one paint,
+        // fit to that cell once, then reveal the correctly framed dungeon.
+        this.initialCenterFrame = requestAnimationFrame(() => {
+            this.initialCenterFrame = undefined;
+            if (!this.scene.isActive() || !this.cameraController) return;
+            this.scale.refresh();
+            this.cameraController.initializeViewport();
+            this.mapView?.setVisible(true);
+        });
         this.waveManager = new WaveManager(this, initialDungeon, {
             // Remove the seed when you want a different sequence each reload.
             seed: 1337,
@@ -94,6 +106,11 @@ export class DungeonScene extends Scene {
 
         EventBus.on("room-selected", handleRoomSelected);
         this.events.once("shutdown", () => {
+            if (this.initialCenterFrame !== undefined) {
+                cancelAnimationFrame(this.initialCenterFrame);
+                this.initialCenterFrame = undefined;
+            }
+
             EventBus.off("room-selected", handleRoomSelected);
             this.waveManager?.destroy();
             this.waveManager = undefined;
@@ -108,5 +125,5 @@ export class DungeonScene extends Scene {
     update(_time: number, delta: number): void {
         this.roomPopulation?.update(delta);
     }
-}
 
+}

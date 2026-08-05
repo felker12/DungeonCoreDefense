@@ -21,5 +21,58 @@
 }
 
 #game-container canvas {
+    position: absolute;
+    inset: 0;
     display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.game-shell-react {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 440px);
+    width: 100vw;
+    height: 100dvh;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.game-viewport {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.phaser-host {
+    position: absolute;
+    inset: 0;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.command-panel {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.game-shell-react:has(.command-panel.is-closed) {
+    grid-template-columns: minmax(0, 1fr) 56px;
+}
+
+@media (max-width: 1023px) {
+    .game-shell-react,
+    .game-shell-react:has(.command-panel.is-closed) {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(320px, 1fr) minmax(56px, 44dvh);
+    }
+
+    .game-shell-react:has(.command-panel.is-closed) {
+        grid-template-rows: minmax(320px, 1fr) 56px;
+    }
 }
