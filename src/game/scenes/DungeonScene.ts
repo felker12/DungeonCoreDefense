@@ -125,5 +125,5 @@ export class DungeonScene extends Scene {
     update(_time: number, delta: number): void {
         this.roomPopulation?.update(delta);
     }
-
 }
+
