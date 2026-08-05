@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RoomDetailsPanel } from "./game/components/RoomDetailsPanel";
+import { ResourceBar } from "./game/components/ResourceBar";
 import { PhaserGame, type IRefPhaserGame } from "./PhaserGame";
 import type { DungeonRoom } from "./game/components/mapComponents/DungeonRoom";
 import { EventBus } from "./game/EventBus";
@@ -79,7 +80,27 @@ function App() {
 
     return (
         <main className="game-shell-react">
-            <section className="game-viewport">
+            <div className="map-column">
+                <ResourceBar
+                    resources={[
+                        { id: "essence", label: "Essence", icon: "✦", value: 148, capacity: 250, tone: "violet" },
+                        { id: "stone", label: "Stone", icon: "◆", value: 72, capacity: 150, tone: "slate" },
+                        { id: "supplies", label: "Supplies", icon: "●", value: 34, capacity: 100, tone: "amber" },
+                    ]}
+                    denizens={{ current: 6, capacity: 8 }}
+                    dungeonPower={1240}
+                    dungeonLevel={1}
+                    nextLevel={{
+                        waveRequired: 3,
+                        waveDefeated: wave.waveNumber > 3,
+                        costs: [
+                            { resource: "Stone", current: 72, required: 150 },
+                            { resource: "Essence", current: 148, required: 50 },
+                        ],
+                        roomCapacityReward: 2,
+                    }}
+                />
+                <section className="game-viewport">
                 <PhaserGame
                     ref={phaserRef}
                     currentActiveScene={handleSceneReady}
@@ -88,7 +109,8 @@ function App() {
                     <span className="text-[#b991d1]">✥</span> Drag to pan{" "}
                     <i className="h-3 w-px bg-white/15" /> Scroll to zoom
                 </div>
-            </section>
+                </section>
+            </div>
 
             <aside
                 className={`command-panel relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-l border-[#dab76c]/15 text-[#eee9df] shadow-[-18px_0_50px_rgba(0,0,0,.28)] ${panelOpen ? "is-open" : "is-closed"}`}
@@ -235,4 +257,3 @@ function Metric({
         </div>
     );
 }
-

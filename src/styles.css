@@ -51,6 +51,239 @@
     overflow: hidden;
 }
 
+.map-column {
+    display: grid;
+    grid-template-rows: 64px minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    isolation: isolate;
+}
+.resource-bar {
+    position: relative;
+    z-index: 30;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(218, 183, 108, 0.22);
+    color: #eee9df;
+    background:
+        radial-gradient(
+            circle at 72% -80%,
+            rgba(127, 77, 172, 0.3),
+            transparent 40%
+        ),
+        linear-gradient(180deg, #1a1520, #100d14);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+}
+.resource-bar-scroll {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.resource-bar-scroll::-webkit-scrollbar {
+    display: none;
+}
+.resource-group {
+    display: flex;
+    align-items: stretch;
+    flex: none;
+}
+.resource-bar-spacer {
+    flex: 1 1 24px;
+    min-width: 16px;
+}
+.resource-cell {
+    display: flex;
+    align-items: center;
+    min-width: 126px;
+    gap: 10px;
+    padding: 0 17px;
+    border: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    color: inherit;
+    background: transparent;
+    text-align: left;
+}
+.resource-icon {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    place-items: center;
+    border: 1px solid currentColor;
+    border-radius: 9px;
+    color: #aa78cf;
+    background: rgba(145, 82, 181, 0.1);
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
+}
+.resource-copy {
+    display: grid;
+    gap: 2px;
+    white-space: nowrap;
+}
+.resource-copy small {
+    color: #8f8795;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.resource-copy strong {
+    color: #f7f1e8;
+    font-size: 15px;
+    line-height: 1;
+}
+.resource-copy em {
+    color: #77707c;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 600;
+}
+.resource-tone-slate .resource-icon {
+    color: #99a4b5;
+    background: rgba(122, 137, 157, 0.1);
+}
+.resource-tone-amber .resource-icon {
+    color: #d1a553;
+    background: rgba(190, 140, 49, 0.1);
+}
+.resource-cell-denizens .resource-icon {
+    color: #c58d61;
+    background: rgba(174, 101, 58, 0.1);
+}
+.resource-cell-power {
+    min-width: 164px;
+    background: linear-gradient(180deg, rgba(222, 181, 94, 0.055), transparent);
+}
+.resource-cell-power .resource-icon {
+    color: #e1bd66;
+    background: rgba(208, 160, 65, 0.12);
+    box-shadow: 0 0 16px rgba(211, 163, 68, 0.12);
+}
+.resource-cell-power .resource-copy strong {
+    color: #f0ca75;
+    font-size: 17px;
+}
+.is-near-capacity .resource-icon {
+    box-shadow: 0 0 13px rgba(218, 167, 74, 0.25);
+}
+.level-control {
+    position: relative;
+    flex: none;
+}
+.resource-cell-level {
+    height: 100%;
+    min-width: 154px;
+    cursor: pointer;
+    border-left: 1px solid rgba(218, 183, 108, 0.12);
+}
+.resource-cell-level:hover,
+.resource-cell-level.is-active {
+    background: rgba(218, 183, 108, 0.07);
+}
+.resource-cell-level .resource-icon {
+    color: #dfbb67;
+}
+.level-chevron {
+    margin-left: auto;
+    color: #756d79;
+    transition: transform 160ms ease;
+}
+.resource-cell-level.is-active .level-chevron {
+    transform: rotate(180deg);
+}
+.level-popover {
+    position: fixed;
+    z-index: 60;
+    top: 70px;
+    right: clamp(356px, 29vw, 456px);
+    width: min(310px, calc(100vw - 24px));
+    padding: 16px;
+    border: 1px solid rgba(218, 183, 108, 0.22);
+    border-radius: 14px;
+    background: linear-gradient(155deg, #211827, #120f17 72%);
+    box-shadow: 0 22px 55px rgba(0, 0, 0, 0.48);
+}
+.level-popover-heading,
+.level-cost {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+.level-popover-heading small {
+    display: block;
+    margin-bottom: 3px;
+    color: #9b8da1;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.level-popover-heading strong {
+    color: #f4ede2;
+    font-family: Georgia, serif;
+    font-size: 18px;
+}
+.level-popover-heading > span {
+    padding: 5px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    color: #a397a8;
+    font-size: 9px;
+}
+.level-requirements {
+    margin-top: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.025);
+}
+.level-cost {
+    padding: 9px 11px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    color: #9d929f;
+    font-size: 11px;
+}
+.level-cost:last-child {
+    border-bottom: 0;
+}
+.level-cost strong {
+    color: #d6ccd8;
+}
+.requirement-ready {
+    color: #78c795 !important;
+}
+.level-reward {
+    margin: 12px 0;
+    color: #bdb2bf;
+    font-size: 10px;
+}
+.expand-dungeon-button {
+    width: 100%;
+    cursor: pointer;
+    border: 1px solid #e3bf69;
+    border-radius: 9px;
+    padding: 9px 12px;
+    color: #21180d;
+    background: linear-gradient(135deg, #e5c36e, #c9973e);
+    font-weight: 800;
+}
+.expand-dungeon-button:disabled {
+    cursor: not-allowed;
+    border-color: #3b343e;
+    color: #766d78;
+    background: #28222b;
+}
+
 .phaser-host {
     position: absolute;
     inset: 0;
@@ -132,6 +365,48 @@
     grid-template-columns: minmax(0, 1fr) 56px;
 }
 
+/* Keep all six counters visible beside the desktop command panel at
+   intermediate viewport widths. The scroll container remains available as a
+   fallback if the map column becomes narrower than the compact layout. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+    .resource-bar-spacer {
+        min-width: 6px;
+    }
+    .resource-cell {
+        min-width: 104px;
+        gap: 7px;
+        padding: 0 9px;
+    }
+    .resource-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        font-size: 12px;
+    }
+    .resource-copy small {
+        font-size: 8px;
+        letter-spacing: 0.075em;
+    }
+    .resource-copy strong {
+        font-size: 13px;
+    }
+    .resource-copy em {
+        font-size: 8px;
+    }
+    .resource-cell-denizens {
+        min-width: 112px;
+    }
+    .resource-cell-power {
+        min-width: 142px;
+    }
+    .resource-cell-power .resource-copy strong {
+        font-size: 15px;
+    }
+    .resource-cell-level {
+        min-width: 132px;
+    }
+}
+
 @media (max-width: 1023px) {
     .game-shell-react,
     .game-shell-react:has(.command-panel.is-closed) {
@@ -141,6 +416,30 @@
 
     .game-shell-react:has(.command-panel.is-closed) {
         grid-template-rows: minmax(320px, 1fr) 56px;
+    }
+
+    .level-popover {
+        right: 12px;
+    }
+}
+
+@media (max-width: 640px) {
+    .map-column {
+        grid-template-rows: 58px minmax(0, 1fr);
+    }
+    .resource-cell {
+        min-width: 116px;
+        padding: 0 12px;
+    }
+    .resource-cell-power {
+        min-width: 150px;
+    }
+    .resource-cell-level {
+        min-width: 142px;
+    }
+    .resource-icon {
+        width: 25px;
+        height: 25px;
     }
 }
 
