@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RoomDetailsPanel } from "./game/components/RoomDetailsPanel";
 import { ResourceBar } from "./game/components/ResourceBar";
+import { DenizenPanel } from "./game/components/DenizenPanel";
 import { PhaserGame, type IRefPhaserGame } from "./PhaserGame";
+import type { DenizenType } from "./game/components/entityComponents/entityData";
 import type { DungeonRoom } from "./game/components/mapComponents/DungeonRoom";
 import { EventBus } from "./game/EventBus";
 import type {
+    DenizenRosterSnapshot,
     RoomPopulationSnapshot,
     ResourceSlotType,
 } from "./game/rooms/RoomPopulationManager";
 import { DungeonScene, type RoomDetails } from "./game/scenes/DungeonScene";
 import type { WaveStatus } from "./game/waves/WaveManager";
 import type { ResourceSnapshot } from "./game/resources/ResourceManager";
+import { StatsPanel } from "./game/components/StatsPanel";
 
 const INITIAL_STATUS: WaveStatus = {
     waveNumber: 0,
@@ -27,22 +31,52 @@ const INITIAL_RESOURCES: ResourceSnapshot = {
         stone: { id: "stone", value: 72, capacity: 150 },
         supplies: { id: "supplies", value: 34, capacity: 100 },
     },
+    incomePerSecond: {
+        essence: 0,
+        stone: 0,
+        supplies: 0,
+    },
+    totalEarned: {
+        essence: 0,
+        stone: 0,
+        supplies: 0,
+    },
 };
+
+const INITIAL_ROSTER: DenizenRosterSnapshot = {
+    denizens: [],
+    capacity: 8,
+};
+
+type PanelTab = "room" | "denizens" | "stats";
 
 function App() {
     const [wave, setWave] = useState(INITIAL_STATUS);
     const [resourceState, setResourceState] = useState(INITIAL_RESOURCES);
+    const [denizenRoster, setDenizenRoster] = useState(INITIAL_ROSTER);
     const [sceneReady, setSceneReady] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<RoomDetails | null>(null);
     const [panelOpen, setPanelOpen] = useState(true);
     const phaserRef = useRef<IRefPhaserGame>(null);
     const dungeonSceneRef = useRef<DungeonScene | null>(null);
+    const [activeTab, setActiveTab] = useState<PanelTab>("room");
 
     useEffect(() => {
         const handleStatus = (status: WaveStatus): void => setWave(status);
         EventBus.on("wave-status-changed", handleStatus);
         return () => {
             EventBus.off("wave-status-changed", handleStatus);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleRoster = (snapshot: DenizenRosterSnapshot): void =>
+            setDenizenRoster(snapshot);
+
+        EventBus.on("denizen-roster-changed", handleRoster);
+
+        return () => {
+            EventBus.off("denizen-roster-changed", handleRoster);
         };
     }, []);
 
@@ -64,6 +98,7 @@ function App() {
         const handleSelected = (room: DungeonRoom): void => {
             refreshRoom(room.id);
             setPanelOpen(true);
+            setActiveTab("room");
         };
         const handlePopulation = (snapshot: RoomPopulationSnapshot): void => {
             setSelectedRoom((current) => {
@@ -88,6 +123,7 @@ function App() {
         if (!(scene instanceof DungeonScene)) return;
 
         dungeonSceneRef.current = scene;
+        setDenizenRoster(scene.getDenizenRoster());
         setSceneReady(true);
     }, []);
     const getScene = (): DungeonScene | null => dungeonSceneRef.current;
@@ -96,6 +132,9 @@ function App() {
         if (selectedRoom)
             getScene()?.upgradeSelectedRoom(selectedRoom.room.id, slot);
     };
+
+    const recruitDefender = (type: DenizenType): boolean =>
+        getScene()?.recruitDefender(type) ?? false;
 
     return (
         <main className="game-shell-react">
@@ -121,7 +160,10 @@ function App() {
                             tone: "amber",
                         },
                     ]}
-                    denizens={{ current: 6, capacity: 8 }}
+                    denizens={{
+                        current: denizenRoster.denizens.length,
+                        capacity: denizenRoster.capacity,
+                    }}
                     dungeonPower={1240}
                     dungeonLevel={1}
                     nextLevel={{
@@ -221,26 +263,79 @@ function App() {
                             </button>
                         </header>
 
-                        <nav className="grid grid-cols-3 border-b border-white/8 bg-black/15 px-3">
-                            <button className="panel-tab-active relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold text-[#e7cb89]">
-                                <span>▦</span>Room
-                            </button>
+                        <nav className="grid grid-cols-4 border-b border-white/8 bg-black/15 px-3">
                             <button
+                                type="button"
+                                onClick={() => setActiveTab("room")}
+                                className={`relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold ${
+                                    activeTab === "room"
+                                        ? "panel-tab-active text-[#e7cb89]"
+                                        : "text-[#77707c]"
+                                }`}
+                            >
+                                <span>▦</span>
+                                Room
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("denizens")}
+                                className={`relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold ${
+                                    activeTab === "denizens"
+                                        ? "panel-tab-active text-[#e7cb89]"
+                                        : "text-[#77707c] hover:text-[#bcb2c0]"
+                                }`}
+                            >
+                                <span>♟</span>
+                                Denizens
+                            </button>
+
+                            <button
+                                type="button"
                                 className="flex cursor-not-allowed items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold text-[#6f6874] opacity-50"
                                 disabled
                             >
-                                <span>♟</span>Denizens
+                                <span>◇</span>
+                                Shop
                             </button>
+
                             <button
-                                className="flex cursor-not-allowed items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold text-[#6f6874] opacity-50"
-                                disabled
+                                type="button"
+                                onClick={() => setActiveTab("stats")}
+                                className={`relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold ${
+                                    activeTab === "stats"
+                                        ? "panel-tab-active text-[#e7cb89]"
+                                        : "text-[#77707c] hover:text-[#bcb2c0]"
+                                }`}
                             >
-                                <span>◇</span>Shop
+                                <span>▥</span>
+                                Stats
                             </button>
                         </nav>
 
                         <div className="panel-content min-h-0 flex-1 overflow-y-auto p-5">
-                            {selectedRoom ? (
+                            {activeTab === "stats" ? (
+                                <StatsPanel
+                                    resources={resourceState}
+                                    waveActive={waveActive}
+                                    completedWaves={Math.max(
+                                        0,
+                                        wave.waveNumber -
+                                            (wave.state === "spawning" ||
+                                            wave.state === "advancing"
+                                                ? 1
+                                                : 0),
+                                    )}
+                                />
+                            ) : activeTab === "denizens" ? (
+                                <DenizenPanel
+                                    roster={denizenRoster}
+                                    supplies={
+                                        resourceState.resources.supplies.value
+                                    }
+                                    onRecruit={recruitDefender}
+                                />
+                            ) : selectedRoom ? (
                                 <RoomDetailsPanel
                                     details={selectedRoom}
                                     onUpgrade={upgradeRoom}
@@ -251,21 +346,25 @@ function App() {
                                     <div className="empty-room-icon mx-auto mb-5 grid size-16 place-items-center rounded-[18px] border border-[#c99b43]/30 bg-[radial-gradient(circle,rgba(161,107,45,.18),rgba(92,56,116,.09))] text-[29px] text-[#c5a45d]">
                                         <span>⌗</span>
                                     </div>
+
                                     <p className="m-0 text-[9px] font-extrabold tracking-[.18em] text-[#d9b766] uppercase">
                                         Room inspection
                                     </p>
+
                                     <h2 className="my-2 font-serif text-[22px] text-[#f5efe4]">
                                         Select a room
                                     </h2>
+
                                     <p className="mx-auto max-w-71.25 text-xs leading-relaxed text-[#948b99]">
                                         Click a room on the map to inspect its
                                         level, population, production, and
                                         available slot upgrades.
                                     </p>
+
                                     <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/7 bg-black/15 px-2.5 py-1.5 text-[9px] text-[#7e7484]">
                                         <span className="text-[#a979c6]">
                                             ✦
-                                        </span>{" "}
+                                        </span>
                                         Choose any colored chamber
                                     </div>
                                 </div>

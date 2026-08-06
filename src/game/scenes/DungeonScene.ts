@@ -2,19 +2,25 @@
 
 import { Scene } from "phaser";
 import { DungeonCameraController } from "../camera/DungeonCameraController";
+import type { EntityId } from "../components/DungeonData";
+import type { DenizenType } from "../components/entityComponents/entityData";
 import type { DungeonRoom } from "../components/mapComponents/DungeonRoom";
 import { initialDungeon } from "../data/initialDungeon";
+import {
+    DEFENDER_OFFERS,
+    createDefender,
+} from "../denizens/DenizenRecruitment";
 import { EventBus } from "../EventBus";
 import { validateDungeonMap } from "../pathfinding/validateDungeonMap";
-import { DungeonMapView } from "../views/DungeonMapView";
-import { WaveManager } from "../waves/WaveManager";
 import { RoomPopulationManager } from "../rooms/RoomPopulationManager";
-import type { EntityId } from "../components/DungeonData";
 import type {
+    DenizenRosterSnapshot,
     RoomPopulationSnapshot,
     ResourceSlotType,
 } from "../rooms/RoomPopulationManager";
 import { ResourceManager } from "../resources/ResourceManager";
+import { DungeonMapView } from "../views/DungeonMapView";
+import { WaveManager } from "../waves/WaveManager";
 
 export interface RoomDetails {
     room: DungeonRoom;
@@ -28,6 +34,7 @@ export class DungeonScene extends Scene {
     private roomPopulation?: RoomPopulationManager;
     private resourceManager?: ResourceManager;
     private initialCenterFrame?: number;
+    private nextDenizenId = 1;
 
     constructor() {
         super("DungeonScene");
@@ -96,6 +103,7 @@ export class DungeonScene extends Scene {
         this.roomPopulation = new RoomPopulationManager(initialDungeon, [], {
             gathererRecoveryMs: 20_000,
             baseProductionPerSecond: 1,
+            rosterCapacity: 8,
         });
         this.resourceManager = new ResourceManager();
         for (const room of initialDungeon.rooms) {
@@ -138,5 +146,48 @@ export class DungeonScene extends Scene {
             0,
         );
         this.resourceManager?.update(delta, productionPerSecond);
+    }
+
+    getDenizenRoster(): DenizenRosterSnapshot {
+        return (
+            this.roomPopulation?.getRosterSnapshot() ?? {
+                denizens: [],
+                capacity: 8,
+            }
+        );
+    }
+
+    recruitDefender(type: DenizenType): boolean {
+        const population = this.roomPopulation;
+        const resources = this.resourceManager;
+        const offer = DEFENDER_OFFERS.find(
+            (candidate) => candidate.type === type,
+        );
+
+        if (!population || !resources || !offer) return false;
+
+        const roster = population.getRosterSnapshot();
+
+        if (
+            roster.denizens.length >= roster.capacity ||
+            resources.getSnapshot().resources.supplies.value < offer.cost
+        ) {
+            return false;
+        }
+
+        const defender = createDefender(
+            offer,
+            `recruited-defender-${this.nextDenizenId++}`,
+        );
+
+        // Add the defender first. This prevents charging the player if adding fails.
+        if (!population.addDenizen(defender)) return false;
+
+        if (!resources.spend("supplies", offer.cost)) {
+            population.removeDenizen(defender.id);
+            return false;
+        }
+
+        return true;
     }
 }
