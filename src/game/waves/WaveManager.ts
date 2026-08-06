@@ -43,6 +43,7 @@ export interface WaveManagerOptions {
     linearWaveGrowth?: number;
     quadraticWaveGrowth?: number;
     wrongTurnChance?: number;
+    completedWaveCount?: number;
 }
 
 const CLASSES = Object.values(AdventurerClass);
@@ -133,6 +134,21 @@ export class WaveManager {
         }
         if (this.wrongTurnChance < 0 || this.wrongTurnChance > 1) {
             throw new Error("Wrong-turn chance must be between 0 and 1.");
+        }
+
+        this.completedWaveCount = normalizeCompletedWaveCount(
+            options.completedWaveCount,
+        );
+        if (this.completedWaveCount > 0) {
+            this.status = {
+                waveNumber: this.completedWaveCount,
+                completedWaves: this.completedWaveCount,
+                state: "completed",
+                totalAdventurers: 0,
+                remainingAdventurers: 0,
+                totalParties: 0,
+                remainingParties: 0,
+            };
         }
         this.emitStatus();
     }
@@ -443,4 +459,10 @@ export class WaveManager {
     private emitStatus(): void {
         EventBus.emit("wave-status-changed", { ...this.status });
     }
+}
+
+function normalizeCompletedWaveCount(value: unknown): number {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0
+        ? value
+        : 0;
 }

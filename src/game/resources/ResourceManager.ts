@@ -19,6 +19,10 @@ export interface ResourceCost {
     amount: number;
 }
 
+export interface ResourceManagerState extends ResourceSnapshot {
+    fractions: Record<DungeonResourceId, number>;
+}
+
 const STARTING_RESOURCES: ResourceSnapshot["resources"] = {
     essence: { id: "essence", value: 148, capacity: 250 },
     stone: { id: "stone", value: 72, capacity: 150 },
@@ -51,12 +55,14 @@ export class ResourceManager {
         supplies: 0,
     };
 
-    constructor() {
+    constructor(initialState?: ResourceManagerState) {
         this.resources = {
             essence: { ...STARTING_RESOURCES.essence },
             stone: { ...STARTING_RESOURCES.stone },
             supplies: { ...STARTING_RESOURCES.supplies },
         };
+
+        if (initialState) this.restoreState(initialState);
         this.emitSnapshot();
     }
 
@@ -144,7 +150,50 @@ export class ResourceManager {
         };
     }
 
+    exportState(): ResourceManagerState {
+        return {
+            ...this.getSnapshot(),
+            fractions: { ...this.fractions },
+        };
+    }
+
+    private restoreState(state: ResourceManagerState): void {
+        for (const id of Object.keys(this.resources) as DungeonResourceId[]) {
+            const savedResource = state.resources?.[id];
+            if (savedResource) {
+                const capacity = normalizeNonNegativeNumber(
+                    savedResource.capacity,
+                    this.resources[id].capacity,
+                );
+                this.resources[id].capacity = capacity;
+                this.resources[id].value = Math.min(
+                    capacity,
+                    normalizeNonNegativeNumber(savedResource.value, 0),
+                );
+            }
+
+            this.fractions[id] = Math.min(
+                0.999999,
+                normalizeNonNegativeNumber(state.fractions?.[id], 0),
+            );
+            this.totalEarned[id] = normalizeNonNegativeNumber(
+                state.totalEarned?.[id],
+                0,
+            );
+            this.incomePerSecond[id] = normalizeNonNegativeNumber(
+                state.incomePerSecond?.[id],
+                0,
+            );
+        }
+    }
+
     private emitSnapshot(): void {
         EventBus.emit("resources-changed", this.getSnapshot());
     }
+}
+
+function normalizeNonNegativeNumber(value: unknown, fallback: number): number {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0
+        ? value
+        : fallback;
 }

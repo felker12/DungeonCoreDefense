@@ -39,6 +39,12 @@ import {
 import { getDenizenAssignmentCost } from "../denizens/DenizenAssignment";
 import { DENIZEN_OFFERS, createDenizen } from "../denizens/DenizenRecruitment";
 import { EventBus } from "../EventBus";
+import {
+    clearDungeonSave,
+    loadDungeonSave,
+    saveDungeonGame,
+    type DungeonSaveData,
+} from "../saves/DungeonSave";
 import { validateDungeonMap } from "../pathfinding/validateDungeonMap";
 import { RoomPopulationManager } from "../rooms/RoomPopulationManager";
 import type {
@@ -134,6 +140,12 @@ export interface DungeonConstructionSnapshot {
     coreRelocation: CoreRelocationOption;
 }
 
+export interface DungeonSaveStatus {
+    hasSave: boolean;
+    lastSavedAt: string | null;
+    canSave: boolean;
+}
+
 export class DungeonScene extends Scene {
     private mapView?: DungeonMapView;
     private cameraController?: DungeonCameraController;
@@ -147,6 +159,8 @@ export class DungeonScene extends Scene {
     private nextConnectionId = 1;
     private dungeonLevel = 1;
     private dungeon: DungeonMap = cloneDungeonMap(initialDungeon);
+    private hasSavedGame = false;
+    private lastSavedAt: string | null = null;
 
     constructor() {
         super("DungeonScene");
@@ -207,6 +221,70 @@ export class DungeonScene extends Scene {
                 lastAttackerCount: 0,
             }
         );
+    }
+
+    getDungeonSnapshot(): DungeonMap {
+        return cloneDungeonMap(this.dungeon);
+    }
+
+    getSaveStatus(): DungeonSaveStatus {
+        const waveState = this.waveManager?.getStatus().state ?? "waiting";
+        return {
+            hasSave: this.hasSavedGame,
+            lastSavedAt: this.lastSavedAt,
+            canSave:
+                waveState !== "spawning" &&
+                waveState !== "advancing" &&
+                waveState !== "failed",
+        };
+    }
+
+    saveGame(): boolean {
+        const waves = this.waveManager;
+        const core = this.coreManager;
+        const population = this.roomPopulation;
+        const resources = this.resourceManager;
+        if (!waves || !core || !population || !resources) return false;
+
+        const waveState = waves.getStatus().state;
+        if (
+            waveState === "spawning" ||
+            waveState === "advancing" ||
+            waveState === "failed"
+        ) {
+            return false;
+        }
+
+        const saved = saveDungeonGame({
+            dungeon: cloneDungeonMap(this.dungeon),
+            dungeonLevel: this.dungeonLevel,
+            completedWaves: waves.getCompletedWaveCount(),
+            resources: resources.exportState(),
+            roomPopulation: population.exportState(),
+            core: core.exportState(),
+            counters: {
+                nextDenizenId: this.nextDenizenId,
+                nextRoomId: this.nextRoomId,
+                nextConnectionId: this.nextConnectionId,
+            },
+        });
+        if (!saved) return false;
+
+        this.hasSavedGame = true;
+        this.lastSavedAt = saved.savedAt;
+        this.emitSaveStatus();
+        return true;
+    }
+
+    resetSavedGame(): boolean {
+        if (this.waveManager?.isActive()) return false;
+        if (!clearDungeonSave()) return false;
+
+        this.hasSavedGame = false;
+        this.lastSavedAt = null;
+        this.emitSaveStatus();
+        this.scene.restart();
+        return true;
     }
 
     getRoomDetails(roomId: EntityId): RoomDetails | null {
@@ -275,12 +353,24 @@ export class DungeonScene extends Scene {
 
         // The checks and mutation are synchronous, so spending after a successful
         // upgrade guarantees a rejected upgrade never charges the player.
-        return upgraded && resources.spend(cost.resource, cost.amount);
+        if (!upgraded || !resources.spend(cost.resource, cost.amount)) {
+            return false;
+        }
+
+        this.autosave();
+        return true;
     }
 
     create(): void {
         this.cameras.main.setBackgroundColor("#111018");
-        this.dungeon = cloneDungeonMap(initialDungeon);
+        const loadedSave = this.loadSavedGame();
+        if (!loadedSave) {
+            this.dungeon = cloneDungeonMap(initialDungeon);
+            this.dungeonLevel = 1;
+            this.nextDenizenId = 1;
+            this.nextRoomId = 1;
+            this.nextConnectionId = 1;
+        }
         validateDungeonMap(this.dungeon);
         this.mapView = new DungeonMapView(this, this.dungeon);
         this.mapView.setVisible(false);
@@ -304,6 +394,7 @@ export class DungeonScene extends Scene {
             regenerationPerSecond: 0.75,
             regenerationCapPercent: 0.6,
             minimumRetryHealthPercent: 0.5,
+            initialState: loadedSave?.core,
             onChange: (snapshot) =>
                 EventBus.emit("dungeon-core-changed", snapshot),
         });
@@ -318,13 +409,15 @@ export class DungeonScene extends Scene {
             linearWaveGrowth: 1.25,
             quadraticWaveGrowth: 0.035,
             wrongTurnChance: 0.65,
+            completedWaveCount: loadedSave?.completedWaves,
         });
         this.roomPopulation = new RoomPopulationManager(this.dungeon, [], {
             gathererRecoveryMs: 20_000,
             baseProductionPerSecond: 1,
             rosterCapacity: 8,
+            initialState: loadedSave?.roomPopulation,
         });
-        this.resourceManager = new ResourceManager();
+        this.resourceManager = new ResourceManager(loadedSave?.resources);
 
         for (const room of this.dungeon.rooms) {
             const snapshot = this.roomPopulation.getSnapshot(room.id);
@@ -343,6 +436,7 @@ export class DungeonScene extends Scene {
         const handleWaveStatus = (status: WaveStatus): void => {
             if (status.state === "completed") {
                 this.coreManager?.completeRaid();
+                this.autosave();
             }
         };
 
@@ -367,6 +461,8 @@ export class DungeonScene extends Scene {
             this.cameraController = undefined;
         });
 
+        this.emitProgression();
+        this.emitSaveStatus();
         EventBus.emit("current-scene-ready", this);
     }
 
@@ -438,8 +534,10 @@ export class DungeonScene extends Scene {
 
         const cost = getDenizenAssignmentCost(denizen.role);
         if (!resources.spend(cost.resource, cost.amount)) return false;
+        if (!population.assignDenizen(denizenId, roomId)) return false;
 
-        return population.assignDenizen(denizenId, roomId);
+        this.autosave();
+        return true;
     }
 
     assignDefenderToRoom(denizenId: EntityId, roomId: EntityId): boolean {
@@ -448,7 +546,10 @@ export class DungeonScene extends Scene {
 
     unassignDenizen(denizenId: EntityId): boolean {
         if (this.waveManager?.isActive()) return false;
-        return this.roomPopulation?.unassignDenizen(denizenId) ?? false;
+        if (!this.roomPopulation?.unassignDenizen(denizenId)) return false;
+
+        this.autosave();
+        return true;
     }
 
     unassignDefender(denizenId: EntityId): boolean {
@@ -479,9 +580,10 @@ export class DungeonScene extends Scene {
         );
 
         if (!resources.spend("supplies", offer.cost)) return false;
-        if (population.addDenizen(denizen)) return true;
+        if (!population.addDenizen(denizen)) return false;
 
-        return false;
+        this.autosave();
+        return true;
     }
 
     recruitDefender(type: DenizenType): boolean {
@@ -681,6 +783,7 @@ export class DungeonScene extends Scene {
             (room) => room.id === result.coreRoomId,
         );
         if (coreRoom) EventBus.emit("room-selected", coreRoom);
+        this.autosave();
         return true;
     }
 
@@ -734,6 +837,7 @@ export class DungeonScene extends Scene {
         this.refreshTopology(room.id);
         this.mapView?.selectRoom(room.id);
         EventBus.emit("room-selected", room);
+        this.autosave();
         return true;
     }
 
@@ -746,9 +850,17 @@ export class DungeonScene extends Scene {
             return false;
         }
 
-        const first = this.dungeon.rooms.find((room) => room.id === firstRoomId);
-        const second = this.dungeon.rooms.find((room) => room.id === secondRoomId);
-        if (!first || !second || !areRoomsConnectable(this.dungeon, first, second)) {
+        const first = this.dungeon.rooms.find(
+            (room) => room.id === firstRoomId,
+        );
+        const second = this.dungeon.rooms.find(
+            (room) => room.id === secondRoomId,
+        );
+        if (
+            !first ||
+            !second ||
+            !areRoomsConnectable(this.dungeon, first, second)
+        ) {
             return false;
         }
 
@@ -781,6 +893,7 @@ export class DungeonScene extends Scene {
         this.dungeon.connections.push(connection);
         this.mapView?.addConnection(connection);
         this.refreshTopology(firstRoomId);
+        this.autosave();
         return true;
     }
 
@@ -795,9 +908,13 @@ export class DungeonScene extends Scene {
         );
         if (connectionIndex < 0) return false;
 
-        const [connection] = this.dungeon.connections.splice(connectionIndex, 1);
+        const [connection] = this.dungeon.connections.splice(
+            connectionIndex,
+            1,
+        );
         this.mapView?.removeConnection(connection.id);
         this.refreshTopology();
+        this.autosave();
         return true;
     }
 
@@ -836,6 +953,7 @@ export class DungeonScene extends Scene {
         this.dungeonLevel += 1;
         this.emitProgression();
         EventBus.emit("dungeon-construction-changed", null);
+        this.autosave();
         return true;
     }
 
@@ -894,7 +1012,9 @@ export class DungeonScene extends Scene {
         roomId: EntityId,
         direction: CardinalDirection,
     ): boolean {
-        const room = this.dungeon.rooms.find((candidate) => candidate.id === roomId);
+        const room = this.dungeon.rooms.find(
+            (candidate) => candidate.id === roomId,
+        );
         if (!room) return false;
 
         return this.dungeon.connections.some((connection) => {
@@ -918,6 +1038,64 @@ export class DungeonScene extends Scene {
         });
     }
 
+    private loadSavedGame(): DungeonSaveData | null {
+        const save = loadDungeonSave();
+        if (!save) return null;
+
+        try {
+            const dungeon = cloneDungeonMap(save.dungeon);
+            validateDungeonMap(dungeon);
+
+            this.dungeon = dungeon;
+            this.dungeonLevel = Math.max(1, Math.floor(save.dungeonLevel));
+            this.restoreIdCounters(save);
+            this.hasSavedGame = true;
+            this.lastSavedAt = save.savedAt;
+            return save;
+        } catch (error) {
+            console.warn(
+                "The saved dungeon was invalid and has been cleared.",
+                error,
+            );
+            clearDungeonSave();
+            this.hasSavedGame = false;
+            this.lastSavedAt = null;
+            return null;
+        }
+    }
+
+    private restoreIdCounters(save: DungeonSaveData): void {
+        this.nextRoomId = Math.max(
+            save.counters.nextRoomId,
+            getNextNumericId(
+                this.dungeon.rooms.map((room) => room.id),
+                /^player-room-(\d+)$/,
+            ),
+        );
+        this.nextConnectionId = Math.max(
+            save.counters.nextConnectionId,
+            getNextNumericId(
+                this.dungeon.connections.map((connection) => connection.id),
+                /^player-connection-(\d+)$/,
+            ),
+        );
+        this.nextDenizenId = Math.max(
+            save.counters.nextDenizenId,
+            getNextNumericId(
+                save.roomPopulation.denizens.map((denizen) => denizen.id),
+                /^recruited-(?:producer|defender)-(\d+)$/,
+            ),
+        );
+    }
+
+    private autosave(): void {
+        this.saveGame();
+    }
+
+    private emitSaveStatus(): void {
+        EventBus.emit("dungeon-save-changed", this.getSaveStatus());
+    }
+
     private createUniqueRoomId(): EntityId {
         let id: EntityId;
         do {
@@ -936,3 +1114,14 @@ export class DungeonScene extends Scene {
         return id;
     }
 }
+
+function getNextNumericId(ids: readonly EntityId[], pattern: RegExp): number {
+    let highest = 0;
+    for (const id of ids) {
+        const match = pattern.exec(id);
+        if (!match) continue;
+        highest = Math.max(highest, Number(match[1]) || 0);
+    }
+    return highest + 1;
+}
+

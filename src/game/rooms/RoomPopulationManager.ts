@@ -15,10 +15,17 @@ import { createInitialRoomCapacity } from "./RoomCapacity";
 
 export type ResourceSlotType = "gatherer" | "defender";
 
+export interface RoomPopulationState {
+    denizens: readonly DenizenData[];
+    rosterCapacity: number;
+    capacities: Record<EntityId, RoomCapacity>;
+}
+
 export interface RoomPopulationOptions {
     gathererRecoveryMs?: number;
     baseProductionPerSecond?: number;
     rosterCapacity?: number;
+    initialState?: RoomPopulationState;
 }
 
 export interface RoomPopulationSnapshot {
@@ -55,9 +62,20 @@ export class RoomPopulationManager {
 
         for (const room of dungeon.rooms) {
             const capacity = createInitialRoomCapacity(room);
-            if (capacity) this.capacities.set(room.id, capacity);
+            if (capacity) {
+                this.capacities.set(room.id, capacity);
+                room.populationCapacity = { ...capacity };
+            }
         }
-        for (const denizen of denizens) this.denizens.set(denizen.id, denizen);
+
+        if (options.initialState) {
+            this.restoreState(options.initialState);
+        } else {
+            for (const denizen of denizens) {
+                this.denizens.set(denizen.id, { ...denizen });
+            }
+            this.rebuildRoomAssignments();
+        }
     }
 
     registerRoom(room: DungeonRoom): boolean {
@@ -67,6 +85,7 @@ export class RoomPopulationManager {
         if (!capacity) return true;
 
         this.capacities.set(room.id, capacity);
+        room.populationCapacity = { ...capacity };
         this.emitRoom(room.id);
         return true;
     }
@@ -208,6 +227,7 @@ export class RoomPopulationManager {
             return false;
         }
         capacity.defenders += 1;
+        this.syncRoomCapacity(roomId);
         this.raiseRoomLevel(roomId);
         this.emitRoom(roomId);
         return true;
@@ -225,6 +245,7 @@ export class RoomPopulationManager {
             capacity.defenders += 1;
         }
 
+        this.syncRoomCapacity(roomId);
         this.raiseRoomLevel(roomId);
         this.emitRoom(roomId);
         return true;
@@ -275,6 +296,19 @@ export class RoomPopulationManager {
         };
     }
 
+    exportState(): RoomPopulationState {
+        return {
+            denizens: this.getRosterSnapshot().denizens,
+            rosterCapacity: this.rosterCapacity,
+            capacities: Object.fromEntries(
+                Array.from(this.capacities, ([roomId, capacity]) => [
+                    roomId,
+                    { ...capacity },
+                ]),
+            ),
+        };
+    }
+
     expandRosterCapacity(amount: number): boolean {
         if (!Number.isInteger(amount) || amount <= 0) return false;
 
@@ -322,6 +356,85 @@ export class RoomPopulationManager {
         };
     }
 
+    private restoreState(state: RoomPopulationState): void {
+        this.rosterCapacity = Math.max(
+            1,
+            normalizePositiveInteger(state.rosterCapacity, this.rosterCapacity),
+            state.denizens?.length ?? 0,
+        );
+
+        for (const room of this.dungeon.rooms) {
+            const savedCapacity = cloneValidCapacity(
+                state.capacities?.[room.id],
+            );
+            if (!savedCapacity) continue;
+
+            this.capacities.set(room.id, savedCapacity);
+            room.populationCapacity = { ...savedCapacity };
+        }
+
+        this.denizens.clear();
+        for (const savedDenizen of state.denizens ?? []) {
+            if (!savedDenizen?.id || this.denizens.has(savedDenizen.id))
+                continue;
+            this.denizens.set(savedDenizen.id, {
+                ...savedDenizen,
+                assignedRoomId: null,
+            });
+        }
+
+        const assignments = (state.denizens ?? []).flatMap((denizen) =>
+            denizen.assignedRoomId
+                ? [{ denizenId: denizen.id, roomId: denizen.assignedRoomId }]
+                : [],
+        );
+        this.rebuildRoomAssignments();
+
+        for (const assignment of assignments) {
+            const denizen = this.denizens.get(assignment.denizenId);
+            if (
+                !denizen ||
+                !this.canAssignDenizen(denizen.id, assignment.roomId)
+            ) {
+                continue;
+            }
+
+            const room = this.dungeon.rooms.find(
+                (candidate) => candidate.id === assignment.roomId,
+            );
+            if (!room) continue;
+
+            denizen.assignedRoomId = room.id;
+            room.denizenIds.push(denizen.id);
+        }
+    }
+
+    private rebuildRoomAssignments(): void {
+        for (const room of this.dungeon.rooms) room.denizenIds = [];
+
+        for (const denizen of this.denizens.values()) {
+            if (!denizen.assignedRoomId) continue;
+
+            const room = this.dungeon.rooms.find(
+                (candidate) => candidate.id === denizen.assignedRoomId,
+            );
+            if (!room) {
+                denizen.assignedRoomId = null;
+                continue;
+            }
+
+            room.denizenIds.push(denizen.id);
+        }
+    }
+
+    private syncRoomCapacity(roomId: EntityId): void {
+        const room = this.dungeon.rooms.find(
+            (candidate) => candidate.id === roomId,
+        );
+        const capacity = this.capacities.get(roomId);
+        if (room && capacity) room.populationCapacity = { ...capacity };
+    }
+
     private raiseRoomLevel(roomId: EntityId): void {
         const room = this.dungeon.rooms.find(
             (candidate) => candidate.id === roomId,
@@ -337,4 +450,52 @@ export class RoomPopulationManager {
     private emitRoster(): void {
         EventBus.emit("denizen-roster-changed", this.getRosterSnapshot());
     }
+}
+
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+    return typeof value === "number" && Number.isInteger(value) && value > 0
+        ? value
+        : fallback;
+}
+
+function cloneValidCapacity(value: unknown): RoomCapacity | null {
+    if (!value || typeof value !== "object") return null;
+    const capacity = value as Partial<RoomCapacity> & Record<string, unknown>;
+
+    if (
+        capacity.kind === "combat" &&
+        isNonNegativeInteger(capacity.defenders) &&
+        isNonNegativeInteger(capacity.maxDefenders) &&
+        capacity.defenders <= capacity.maxDefenders
+    ) {
+        return {
+            kind: "combat",
+            defenders: capacity.defenders,
+            maxDefenders: capacity.maxDefenders,
+        };
+    }
+
+    if (
+        capacity.kind === "resource" &&
+        isNonNegativeInteger(capacity.gatherers) &&
+        isNonNegativeInteger(capacity.maxGatherers) &&
+        isNonNegativeInteger(capacity.defenders) &&
+        isNonNegativeInteger(capacity.maxDefenders) &&
+        capacity.gatherers <= capacity.maxGatherers &&
+        capacity.defenders <= capacity.maxDefenders
+    ) {
+        return {
+            kind: "resource",
+            gatherers: capacity.gatherers,
+            maxGatherers: capacity.maxGatherers,
+            defenders: capacity.defenders,
+            maxDefenders: capacity.maxDefenders,
+        };
+    }
+
+    return null;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }

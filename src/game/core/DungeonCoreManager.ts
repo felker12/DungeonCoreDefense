@@ -16,12 +16,22 @@ export interface DungeonCoreSnapshot {
     lastAttackerCount: number;
 }
 
+export interface DungeonCorePersistentState {
+    health: number;
+    state: DungeonCoreState;
+    raidStartHealth: number | null;
+    retryHealth: number | null;
+    lastDamage: number;
+    lastAttackerCount: number;
+}
+
 export interface DungeonCoreOptions {
     maxHealth?: number;
     defense?: number;
     regenerationPerSecond?: number;
     regenerationCapPercent?: number;
     minimumRetryHealthPercent?: number;
+    initialState?: DungeonCorePersistentState;
     onChange?: (snapshot: DungeonCoreSnapshot) => void;
 }
 
@@ -89,6 +99,7 @@ export class DungeonCoreManager {
         }
 
         this.health = this.maxHealth;
+        if (options.initialState) this.restoreState(options.initialState);
         this.emitSnapshot();
     }
 
@@ -217,6 +228,43 @@ export class DungeonCoreManager {
         };
     }
 
+    exportState(): DungeonCorePersistentState {
+        return {
+            health: this.health,
+            state: this.state,
+            raidStartHealth: this.raidStartHealth,
+            retryHealth: this.retryHealth,
+            lastDamage: this.lastDamage,
+            lastAttackerCount: this.lastAttackerCount,
+        };
+    }
+
+    private restoreState(saved: DungeonCorePersistentState): void {
+        const savedHealth = clampNumber(saved.health, 0, this.maxHealth);
+        const fallbackHealth =
+            nullableClampedNumber(saved.retryHealth, 1, this.maxHealth) ??
+            nullableClampedNumber(saved.raidStartHealth, 1, this.maxHealth) ??
+            this.maxHealth;
+
+        // Saves are written only between raids. Normalize stale active or failed
+        // data to a stable state so loading can never leave the next wave blocked.
+        this.health = Math.max(
+            1,
+            saved.state === "stable" ? savedHealth : fallbackHealth,
+        );
+        this.state = "stable";
+        this.raidStartHealth = null;
+        this.retryHealth = null;
+        this.lastDamage = clampNumber(
+            saved.lastDamage,
+            0,
+            Number.MAX_SAFE_INTEGER,
+        );
+        this.lastAttackerCount = Math.floor(
+            clampNumber(saved.lastAttackerCount, 0, Number.MAX_SAFE_INTEGER),
+        );
+    }
+
     private getRegenerationCap(): number {
         return this.maxHealth * this.regenerationCapPercent;
     }
@@ -224,4 +272,17 @@ export class DungeonCoreManager {
     private emitSnapshot(): void {
         this.onChange?.(this.getSnapshot());
     }
+}
+
+function clampNumber(value: unknown, minimum: number, maximum: number): number {
+    if (typeof value !== "number" || !Number.isFinite(value)) return minimum;
+    return Math.min(maximum, Math.max(minimum, value));
+}
+
+function nullableClampedNumber(
+    value: unknown,
+    minimum: number,
+    maximum: number,
+): number | null {
+    return value === null ? null : clampNumber(value, minimum, maximum);
 }
