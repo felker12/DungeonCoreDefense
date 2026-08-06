@@ -3,6 +3,7 @@
 import { GameObjects, Scene } from "phaser";
 import type { DungeonConnection } from "../components/mapComponents/DungeonConnection";
 import type { DungeonRoom } from "../components/mapComponents/DungeonRoom";
+import { getConnectionDirection } from "../construction/DungeonConstruction";
 
 export class CorridorView extends GameObjects.Graphics {
     constructor(
@@ -19,16 +20,9 @@ export class CorridorView extends GameObjects.Graphics {
             throw new Error(`Invalid dungeon connection: ${connection.id}`);
         }
 
-        const isHorizontal =
-            from.position.y === to.position.y &&
-            from.position.x !== to.position.x;
-        const isVertical =
-            from.position.x === to.position.x &&
-            from.position.y !== to.position.y;
-
-        if (!isHorizontal && !isVertical) {
+        if (!getConnectionDirection(from, to)) {
             throw new Error(
-                `Connection ${connection.id} is invalid. Connected rooms must occupy distinct positions and share exactly one coordinate.`,
+                `Connection ${connection.id} is invalid. Connected rooms must be cardinally aligned.`,
             );
         }
 
