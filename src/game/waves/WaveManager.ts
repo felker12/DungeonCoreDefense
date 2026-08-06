@@ -10,6 +10,7 @@ import {
     type DungeonRoom,
 } from "../components/mapComponents/DungeonRoom";
 import { PartyController } from "../controllers/PartyController";
+import type { RoomEncounterResolver } from "../combat/CombatTypes";
 import { EventBus } from "../EventBus";
 import { DungeonPathfinder } from "../pathfinding/DungeonPathfinder";
 import { createSeededRandom } from "./SeededRandom";
@@ -44,6 +45,7 @@ export interface WaveManagerOptions {
     quadraticWaveGrowth?: number;
     wrongTurnChance?: number;
     completedWaveCount?: number;
+    encounterResolver?: RoomEncounterResolver;
 }
 
 const CLASSES = Object.values(AdventurerClass);
@@ -68,6 +70,7 @@ export class WaveManager {
     private readonly linearWaveGrowth: number;
     private readonly quadraticWaveGrowth: number;
     private readonly wrongTurnChance: number;
+    private readonly encounterResolver?: RoomEncounterResolver;
     private readonly controllers = new Set<PartyController>();
     private readonly pendingSpawnTimers = new Set<Time.TimerEvent>();
     private partiesWaitingToSpawn = 0;
@@ -106,6 +109,7 @@ export class WaveManager {
         this.linearWaveGrowth = options.linearWaveGrowth ?? 1.25;
         this.quadraticWaveGrowth = options.quadraticWaveGrowth ?? 0.035;
         this.wrongTurnChance = options.wrongTurnChance ?? 0.65;
+        this.encounterResolver = options.encounterResolver;
         if (
             this.minPartySize < 1 ||
             this.startingMaxPartySize < this.minPartySize ||
@@ -308,6 +312,7 @@ export class WaveManager {
             this.scene,
             party,
             this.roomsById,
+            { encounterResolver: this.encounterResolver },
         );
         this.controllers.add(controller);
 

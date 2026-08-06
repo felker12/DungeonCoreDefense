@@ -219,26 +219,56 @@ export function RoomDetailsPanel({
                             {population.denizens.map((denizen) => (
                                 <div
                                     key={denizen.id}
-                                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/8 bg-white/3 px-3 py-2.5 text-left text-[11px] text-[#d8d0da]"
+                                    className="rounded-lg border border-white/8 bg-white/3 px-3 py-2.5 text-left text-[11px] text-[#d8d0da]"
                                 >
-                                    <span>
-                                        {denizen.type} · {denizen.role}
-                                    </span>
-                                    <span className="flex items-center gap-2">
-                                        <small className="text-[9px] text-[#796f7e]">
-                                            {denizen.status}
-                                        </small>
-                                        <button
-                                            type="button"
-                                            disabled={assignmentLocked}
-                                            onClick={() =>
-                                                onUnassign(denizen.id)
-                                            }
-                                            className="cursor-pointer rounded-md border border-white/10 bg-white/4 px-2 py-1 text-[8px] font-extrabold tracking-[.06em] text-[#aaa0ae] uppercase transition hover:border-[#bd615b]/30 hover:bg-[#bd615b]/10 hover:text-[#d98a84] disabled:cursor-not-allowed disabled:opacity-35"
-                                        >
-                                            Remove
-                                        </button>
-                                    </span>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <strong className="block capitalize">
+                                                {denizen.type} · {denizen.role}
+                                            </strong>
+                                            <p className="mt-1 mb-0 text-[9px] text-[#8f8597]">
+                                                HP {Math.ceil(denizen.health)} / {denizen.maxHealth} · ATK {denizen.attack} · DEF {denizen.defense}
+                                            </p>
+                                        </div>
+                                        <span className="flex shrink-0 items-center gap-2">
+                                            <small className={`text-[9px] ${
+                                                denizen.health <= 0
+                                                    ? "text-[#d47c76]"
+                                                    : "text-[#796f7e]"
+                                            }`}>
+                                                {denizen.status}
+                                            </small>
+                                            <button
+                                                type="button"
+                                                disabled={assignmentLocked}
+                                                onClick={() =>
+                                                    onUnassign(denizen.id)
+                                                }
+                                                className="cursor-pointer rounded-md border border-white/10 bg-white/4 px-2 py-1 text-[8px] font-extrabold tracking-[.06em] text-[#aaa0ae] uppercase transition hover:border-[#bd615b]/30 hover:bg-[#bd615b]/10 hover:text-[#d98a84] disabled:cursor-not-allowed disabled:opacity-35"
+                                            >
+                                                Remove
+                                            </button>
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/35">
+                                        <div
+                                            className={`h-full rounded-full transition-[width] duration-200 ${
+                                                denizen.health <= 0
+                                                    ? "bg-[#8a4650]"
+                                                    : denizen.health / denizen.maxHealth <= 0.35
+                                                      ? "bg-[#d46550]"
+                                                      : "bg-linear-to-r from-[#7d4ca6] to-[#b47ad5]"
+                                            }`}
+                                            style={{
+                                                width: `${Math.max(0, Math.min(100, (denizen.health / denizen.maxHealth) * 100))}%`,
+                                            }}
+                                        />
+                                    </div>
+                                    {denizen.recoveryRemainingMs > 0 && (
+                                        <p className="mt-1.5 mb-0 text-[8px] font-bold text-[#c47d76] uppercase">
+                                            Respawn in {Math.ceil(denizen.recoveryRemainingMs / 1000)}s
+                                        </p>
+                                    )}
                                 </div>
                             ))}
                         </div>

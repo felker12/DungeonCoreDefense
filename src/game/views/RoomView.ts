@@ -20,6 +20,16 @@ interface RoomVisualStyle {
     icon: string;
 }
 
+interface RoomCombatStatePayload {
+    roomId: string;
+    active: boolean;
+}
+
+interface DenizenHitPayload {
+    roomId: string;
+    denizenId: string;
+}
+
 const ROOM_VISUALS: Record<DungeonRoomType, RoomVisualStyle> = {
     [DungeonRoomType.ENTRANCE]: {
         accent: 0x9aa6b7,
@@ -52,11 +62,17 @@ export class RoomView extends GameObjects.Container {
     private readonly glow: GameObjects.Graphics;
     private readonly surface: GameObjects.Graphics;
     private readonly denizenLayer: GameObjects.Container;
+    private readonly denizenMarkers = new Map<string, GameObjects.Container>();
     private selected = false;
     private hovered = false;
+    private combatActive = false;
     private readonly handlePopulationChanged: (
         snapshot: RoomPopulationSnapshot,
     ) => void;
+    private readonly handleCombatStateChanged: (
+        payload: RoomCombatStatePayload,
+    ) => void;
+    private readonly handleDenizenHit: (payload: DenizenHitPayload) => void;
 
     constructor(scene: Scene, room: DungeonRoom) {
         super(scene, room.position.x, room.position.y);
@@ -193,17 +209,52 @@ export class RoomView extends GameObjects.Container {
         this.handlePopulationChanged = (snapshot): void => {
             if (snapshot.roomId === this.room.id) this.renderDenizens(snapshot);
         };
+        this.handleCombatStateChanged = (payload): void => {
+            if (payload.roomId !== this.room.id) return;
+            this.combatActive = payload.active;
+            this.refreshDenizenCombatAnimations();
+        };
+        this.handleDenizenHit = (payload): void => {
+            if (payload.roomId !== this.room.id) return;
+            const marker = this.denizenMarkers.get(payload.denizenId);
+            if (!marker) return;
+
+            scene.tweens.add({
+                targets: marker,
+                scaleX: 1.3,
+                scaleY: 1.3,
+                alpha: 0.45,
+                duration: 75,
+                ease: "Quad.Out",
+                yoyo: true,
+            });
+        };
+
         EventBus.on("room-population-changed", this.handlePopulationChanged);
+        EventBus.on(
+            "room-combat-state-changed",
+            this.handleCombatStateChanged,
+        );
+        EventBus.on("denizen-hit", this.handleDenizenHit);
         this.once("destroy", () => {
             EventBus.off(
                 "room-population-changed",
                 this.handlePopulationChanged,
             );
+            EventBus.off(
+                "room-combat-state-changed",
+                this.handleCombatStateChanged,
+            );
+            EventBus.off("denizen-hit", this.handleDenizenHit);
+            this.stopDenizenTweens();
         });
     }
 
     private renderDenizens(snapshot: RoomPopulationSnapshot): void {
+        this.stopDenizenTweens();
         this.denizenLayer.removeAll(true);
+        this.denizenMarkers.clear();
+
         const markerSpacing = 22;
         const columns = Math.min(5, Math.max(1, snapshot.denizens.length));
         const rows = Math.ceil(snapshot.denizens.length / columns);
@@ -219,8 +270,8 @@ export class RoomView extends GameObjects.Container {
 
             const shadow = new GameObjects.Arc(
                 this.scene,
-                x + 2,
-                y + 3,
+                2,
+                3,
                 9,
                 0,
                 360,
@@ -230,8 +281,8 @@ export class RoomView extends GameObjects.Container {
             );
             const marker = new GameObjects.Arc(
                 this.scene,
-                x,
-                y,
+                0,
+                0,
                 8,
                 0,
                 360,
@@ -241,8 +292,8 @@ export class RoomView extends GameObjects.Container {
             ).setStrokeStyle(2, recovering ? 0x7b7282 : 0xf5e9cf, 1);
             const center = new GameObjects.Arc(
                 this.scene,
-                x,
-                y,
+                0,
+                0,
                 2.5,
                 0,
                 360,
@@ -251,8 +302,63 @@ export class RoomView extends GameObjects.Container {
                 recovering ? 0.4 : 0.85,
             );
 
-            this.denizenLayer.add([shadow, marker, center]);
+            const markerContainer = new GameObjects.Container(
+                this.scene,
+                x,
+                y,
+                [shadow, marker, center],
+            );
+            markerContainer.setSize(20, 20);
+            markerContainer.setData("baseY", y);
+            markerContainer.setData("recovering", recovering);
+            markerContainer.setInteractive({ useHandCursor: true });
+            markerContainer.on("pointerdown", (...args: unknown[]) => {
+                const event = args.at(-1) as
+                    | { stopPropagation?: () => void }
+                    | undefined;
+                event?.stopPropagation?.();
+                EventBus.emit("denizen-selected", {
+                    denizenId: denizen.id,
+                    roomId: this.room.id,
+                });
+            });
+
+            this.denizenMarkers.set(denizen.id, markerContainer);
+            this.denizenLayer.add(markerContainer);
         });
+
+        this.refreshDenizenCombatAnimations();
+    }
+
+    private refreshDenizenCombatAnimations(): void {
+        this.stopDenizenTweens();
+        if (!this.combatActive) return;
+
+        let index = 0;
+        for (const marker of this.denizenMarkers.values()) {
+            if (marker.getData("recovering")) continue;
+            const baseY = Number(marker.getData("baseY") ?? marker.y);
+            marker.setY(baseY);
+            this.scene.tweens.add({
+                targets: marker,
+                y: baseY - 4,
+                duration: 150 + (index % 3) * 25,
+                delay: (index % 4) * 35,
+                ease: "Sine.InOut",
+                yoyo: true,
+                repeat: -1,
+            });
+            index += 1;
+        }
+    }
+
+    private stopDenizenTweens(): void {
+        for (const marker of this.denizenMarkers.values()) {
+            this.scene.tweens.killTweensOf(marker);
+            marker.setScale(1).setAlpha(1);
+            const baseY = marker.getData("baseY");
+            if (typeof baseY === "number") marker.setY(baseY);
+        }
     }
 
     setSelected(selected: boolean): void {
@@ -288,18 +394,10 @@ export class RoomView extends GameObjects.Container {
         }
 
         this.surface.clear();
-
-        // Thick outer frame and recessed interior floor.
         this.surface.fillStyle(0x0c0910, 1);
         this.surface.fillRoundedRect(left, top, width, height, 13);
         this.surface.fillStyle(borderColor, this.selected ? 1 : 0.78);
-        this.surface.fillRoundedRect(
-            left + 2,
-            top + 2,
-            width - 4,
-            height - 4,
-            11,
-        );
+        this.surface.fillRoundedRect(left + 2, top + 2, width - 4, height - 4, 11);
         this.surface.fillStyle(this.style.floor, 1);
         this.surface.fillRoundedRect(
             left + borderSize,
@@ -308,8 +406,6 @@ export class RoomView extends GameObjects.Container {
             height - borderSize * 2,
             8,
         );
-
-        // Subtle inner bevel and top room-type accent.
         this.surface.lineStyle(1, 0xffffff, 0.1);
         this.surface.strokeRoundedRect(
             left + borderSize + 2,
@@ -320,8 +416,6 @@ export class RoomView extends GameObjects.Container {
         );
         this.surface.fillStyle(this.style.accent, 0.95);
         this.surface.fillRoundedRect(left + 18, top + 9, width - 36, 4, 2);
-
-        // Small metal-like corner studs keep the rooms from feeling like flat cards.
         this.surface.fillStyle(this.style.accent, 0.5);
         this.surface.fillCircle(left + 13, top + 13, 2.5);
         this.surface.fillCircle(left + width - 13, top + 13, 2.5);
@@ -333,4 +427,3 @@ export class RoomView extends GameObjects.Container {
 function toCssColor(color: number): string {
     return `#${color.toString(16).padStart(6, "0")}`;
 }
-

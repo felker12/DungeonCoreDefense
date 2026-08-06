@@ -1,6 +1,7 @@
 import { Scene } from "phaser";
 import { DungeonCameraController } from "../camera/DungeonCameraController";
 import type { EntityId } from "../components/DungeonData";
+import { CombatManager } from "../combat/CombatManager";
 import {
     DenizenRole,
     type DenizenType,
@@ -160,6 +161,7 @@ export class DungeonScene extends Scene {
     private waveManager?: WaveManager;
     private coreManager?: DungeonCoreManager;
     private roomPopulation?: RoomPopulationManager;
+    private combatManager?: CombatManager;
     private resourceManager?: ResourceManager;
     private initialCenterFrame?: number;
     private nextDenizenId = 1;
@@ -456,6 +458,14 @@ export class DungeonScene extends Scene {
             onChange: (snapshot) =>
                 EventBus.emit("dungeon-core-changed", snapshot),
         });
+        this.roomPopulation = new RoomPopulationManager(this.dungeon, [], {
+            gathererRecoveryMs: 20_000,
+            defenderRecoveryMs: 12_000,
+            baseProductionPerSecond: 1,
+            rosterCapacity: 8,
+            initialState: loadedSave?.roomPopulation,
+        });
+        this.combatManager = new CombatManager(this, this.roomPopulation);
         this.waveManager = new WaveManager(this, this.dungeon, {
             seed: 1337,
             partySpawnInterval: 1400,
@@ -468,12 +478,7 @@ export class DungeonScene extends Scene {
             quadraticWaveGrowth: 0.035,
             wrongTurnChance: 0.65,
             completedWaveCount: loadedSave?.completedWaves,
-        });
-        this.roomPopulation = new RoomPopulationManager(this.dungeon, [], {
-            gathererRecoveryMs: 20_000,
-            baseProductionPerSecond: 1,
-            rosterCapacity: 8,
-            initialState: loadedSave?.roomPopulation,
+            encounterResolver: this.combatManager.encounterResolver,
         });
         this.resourceManager = new ResourceManager(loadedSave?.resources);
 
@@ -493,8 +498,13 @@ export class DungeonScene extends Scene {
         };
         const handleWaveStatus = (status: WaveStatus): void => {
             if (status.state === "completed") {
+                this.combatManager?.cancelAll();
+                this.roomPopulation?.restoreAllDenizens();
                 this.coreManager?.completeRaid();
                 this.autosave();
+            } else if (status.state === "failed") {
+                this.combatManager?.cancelAll();
+                this.roomPopulation?.restoreAllDenizens();
             }
         };
 
@@ -512,6 +522,8 @@ export class DungeonScene extends Scene {
             EventBus.off("wave-status-changed", handleWaveStatus);
             this.waveManager?.destroy();
             this.waveManager = undefined;
+            this.combatManager?.destroy();
+            this.combatManager = undefined;
             this.coreManager = undefined;
             this.roomPopulation = undefined;
             this.resourceManager = undefined;
@@ -529,6 +541,7 @@ export class DungeonScene extends Scene {
 
         this.coreManager?.update(delta);
         this.roomPopulation.update(delta);
+        this.combatManager?.update(delta);
         const productionPerSecond = this.dungeon.rooms.reduce(
             (total, room) =>
                 total +

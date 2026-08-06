@@ -23,9 +23,16 @@ export interface RoomPopulationState {
 
 export interface RoomPopulationOptions {
     gathererRecoveryMs?: number;
+    defenderRecoveryMs?: number;
     baseProductionPerSecond?: number;
     rosterCapacity?: number;
     initialState?: RoomPopulationState;
+}
+
+export interface DenizenDamageResult {
+    denizen: DenizenData;
+    damage: number;
+    defeated: boolean;
 }
 
 export interface RoomPopulationSnapshot {
@@ -48,6 +55,7 @@ export class RoomPopulationManager {
     private readonly capacities = new Map<EntityId, RoomCapacity>();
     private readonly denizens = new Map<EntityId, DenizenData>();
     private readonly gathererRecoveryMs: number;
+    private readonly defenderRecoveryMs: number;
     private readonly baseProductionPerSecond: number;
     private rosterCapacity: number;
 
@@ -57,6 +65,7 @@ export class RoomPopulationManager {
         options: RoomPopulationOptions = {},
     ) {
         this.gathererRecoveryMs = options.gathererRecoveryMs ?? 20_000;
+        this.defenderRecoveryMs = options.defenderRecoveryMs ?? 12_000;
         this.baseProductionPerSecond = options.baseProductionPerSecond ?? 1;
         this.rosterCapacity = options.rosterCapacity ?? 8;
 
@@ -161,6 +170,85 @@ export class RoomPopulationManager {
         return denizen ? { ...denizen } : null;
     }
 
+    getActiveDenizens(roomId: EntityId): DenizenData[] {
+        const room = this.dungeon.rooms.find(
+            (candidate) => candidate.id === roomId,
+        );
+        if (!room) return [];
+
+        return room.denizenIds
+            .map((denizenId) => this.denizens.get(denizenId))
+            .filter(
+                (denizen): denizen is DenizenData =>
+                    Boolean(
+                        denizen &&
+                            denizen.status === DenizenStatus.ACTIVE &&
+                            denizen.health > 0,
+                    ),
+            )
+            .map((denizen) => ({ ...denizen }));
+    }
+
+    applyDamage(
+        denizenId: EntityId,
+        requestedDamage: number,
+    ): DenizenDamageResult | null {
+        const denizen = this.denizens.get(denizenId);
+        if (
+            !denizen ||
+            denizen.status !== DenizenStatus.ACTIVE ||
+            denizen.health <= 0 ||
+            !Number.isFinite(requestedDamage) ||
+            requestedDamage <= 0
+        ) {
+            return null;
+        }
+
+        const damage = Math.max(1, Math.floor(requestedDamage));
+        denizen.health = Math.max(0, denizen.health - damage);
+        const defeated = denizen.health === 0;
+
+        if (defeated) {
+            denizen.status = DenizenStatus.RECOVERING;
+            denizen.recoveryRemainingMs =
+                denizen.role === DenizenRole.GATHERER
+                    ? this.gathererRecoveryMs
+                    : this.defenderRecoveryMs;
+        }
+
+        if (denizen.assignedRoomId) {
+            this.emitRoom(denizen.assignedRoomId);
+        }
+        this.emitRoster();
+
+        return {
+            denizen: { ...denizen },
+            damage,
+            defeated,
+        };
+    }
+
+    restoreAllDenizens(): void {
+        const changedRooms = new Set<EntityId>();
+        for (const denizen of this.denizens.values()) {
+            const changed =
+                denizen.health !== denizen.maxHealth ||
+                denizen.status !== DenizenStatus.ACTIVE ||
+                denizen.recoveryRemainingMs !== 0;
+            if (!changed) continue;
+
+            denizen.health = denizen.maxHealth;
+            denizen.status = DenizenStatus.ACTIVE;
+            denizen.recoveryRemainingMs = 0;
+            if (denizen.assignedRoomId) {
+                changedRooms.add(denizen.assignedRoomId);
+            }
+        }
+
+        for (const roomId of changedRooms) this.emitRoom(roomId);
+        if (changedRooms.size > 0) this.emitRoster();
+    }
+
     canAssignDenizen(denizenId: EntityId, roomId: EntityId): boolean {
         const denizen = this.denizens.get(denizenId);
         const room = this.dungeon.rooms.find(
@@ -261,11 +349,7 @@ export class RoomPopulationManager {
             return false;
         }
 
-        gatherer.status = DenizenStatus.RECOVERING;
-        gatherer.health = 0;
-        gatherer.recoveryRemainingMs = this.gathererRecoveryMs;
-        this.emitRoom(gatherer.assignedRoomId);
-        return true;
+        return Boolean(this.applyDamage(denizenId, gatherer.health));
     }
 
     update(deltaMs: number): void {
@@ -285,6 +369,7 @@ export class RoomPopulationManager {
                 changedRooms.add(denizen.assignedRoomId);
         }
         for (const roomId of changedRooms) this.emitRoom(roomId);
+        if (changedRooms.size > 0) this.emitRoster();
     }
 
     getRosterSnapshot(): DenizenRosterSnapshot {
@@ -364,9 +449,7 @@ export class RoomPopulationManager {
         );
 
         for (const room of this.dungeon.rooms) {
-            const savedCapacity = cloneValidCapacity(
-                state.capacities?.[room.id],
-            );
+            const savedCapacity = cloneValidCapacity(state.capacities?.[room.id]);
             if (!savedCapacity) continue;
 
             this.capacities.set(room.id, savedCapacity);
@@ -375,8 +458,7 @@ export class RoomPopulationManager {
 
         this.denizens.clear();
         for (const savedDenizen of state.denizens ?? []) {
-            if (!savedDenizen?.id || this.denizens.has(savedDenizen.id))
-                continue;
+            if (!savedDenizen?.id || this.denizens.has(savedDenizen.id)) continue;
             this.denizens.set(savedDenizen.id, {
                 ...savedDenizen,
                 assignedRoomId: null,
@@ -392,10 +474,7 @@ export class RoomPopulationManager {
 
         for (const assignment of assignments) {
             const denizen = this.denizens.get(assignment.denizenId);
-            if (
-                !denizen ||
-                !this.canAssignDenizen(denizen.id, assignment.roomId)
-            ) {
+            if (!denizen || !this.canAssignDenizen(denizen.id, assignment.roomId)) {
                 continue;
             }
 

@@ -118,6 +118,9 @@ function App() {
     const [mobileRaidOpen, setMobileRaidOpen] = useState(false);
     const [saveStatus, setSaveStatus] =
         useState<DungeonSaveStatus>(INITIAL_SAVE_STATUS);
+    const [focusedDenizenId, setFocusedDenizenId] = useState<string | null>(
+        null,
+    );
 
     useEffect(() => {
         const handleStatus = (status: WaveStatus): void => setWave(status);
@@ -177,6 +180,22 @@ function App() {
         EventBus.on("dungeon-save-changed", handleSaveStatus);
         return () => {
             EventBus.off("dungeon-save-changed", handleSaveStatus);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleDenizenSelected = (payload: {
+            denizenId: string;
+            roomId: string;
+        }): void => {
+            setFocusedDenizenId(payload.denizenId);
+            setPanelOpen(true);
+            setActiveTab("denizens");
+        };
+
+        EventBus.on("denizen-selected", handleDenizenSelected);
+        return () => {
+            EventBus.off("denizen-selected", handleDenizenSelected);
         };
     }, []);
 
@@ -255,6 +274,7 @@ function App() {
         setSaveStatus(scene.getSaveStatus());
         setSelectedRoom(null);
         setConstruction(null);
+        setFocusedDenizenId(null);
         setSceneReady(true);
     }, []);
     const getScene = (): DungeonScene | null => dungeonSceneRef.current;
@@ -602,6 +622,7 @@ function App() {
                                     rooms={denizenRooms}
                                     resources={resourceState.resources}
                                     assignmentLocked={waveActive}
+                                    focusedDenizenId={focusedDenizenId}
                                     onRecruit={recruitDenizen}
                                     onAssign={assignDenizen}
                                     onUnassign={unassignDenizen}

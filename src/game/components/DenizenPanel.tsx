@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { EntityId } from "./DungeonData";
 import {
     DenizenRole,
@@ -22,6 +22,7 @@ interface DenizenPanelProps {
     rooms: readonly DenizenRoomOption[];
     resources: ResourceSnapshot["resources"];
     assignmentLocked: boolean;
+    focusedDenizenId?: EntityId | null;
     onRecruit: (type: DenizenType) => boolean;
     onAssign: (denizenId: EntityId, roomId: EntityId) => boolean;
     onUnassign: (denizenId: EntityId) => boolean;
@@ -34,6 +35,7 @@ export function DenizenPanel({
     rooms,
     resources,
     assignmentLocked,
+    focusedDenizenId = null,
     onRecruit,
     onAssign,
     onUnassign,
@@ -41,7 +43,18 @@ export function DenizenPanel({
     const [selectedRooms, setSelectedRooms] = useState<
         Record<EntityId, EntityId>
     >({});
+    const denizenCards = useRef(new Map<EntityId, HTMLElement>());
     const full = roster.denizens.length >= roster.capacity;
+
+    useEffect(() => {
+        if (!focusedDenizenId) return;
+        const frame = requestAnimationFrame(() => {
+            denizenCards.current
+                .get(focusedDenizenId)
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [focusedDenizenId, roster.denizens]);
 
     return (
         <section aria-labelledby="denizen-roster-title">
@@ -125,7 +138,15 @@ export function DenizenPanel({
                             return (
                                 <article
                                     key={denizen.id}
-                                    className="rounded-xl border border-white/8 bg-black/15 p-3"
+                                    ref={(node: HTMLElement | null) => {
+                                        if (node) denizenCards.current.set(denizen.id, node);
+                                        else denizenCards.current.delete(denizen.id);
+                                    }}
+                                    className={`rounded-xl border p-3 transition ${
+                                        focusedDenizenId === denizen.id
+                                            ? "border-[#d8aa4f]/55 bg-[#d8aa4f]/8 shadow-[0_0_0_1px_rgba(216,170,79,.12),0_0_24px_rgba(216,170,79,.08)]"
+                                            : "border-white/8 bg-black/15"
+                                    }`}
                                 >
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
@@ -134,11 +155,13 @@ export function DenizenPanel({
                                                 {getRoleLabel(denizen)}
                                             </strong>
                                             <p className="mt-1 mb-0 text-[9px] text-[#8f8597]">
-                                                {denizen.role ===
-                                                DenizenRole.GATHERER
-                                                    ? `Production +${denizen.gatheringPower.toFixed(1)}/sec`
-                                                    : `HP ${denizen.health} · ATK ${denizen.attack} · DEF ${denizen.defense}`}
+                                                HP {Math.ceil(denizen.health)} / {denizen.maxHealth} · ATK {denizen.attack} · DEF {denizen.defense}
                                             </p>
+                                            {denizen.role === DenizenRole.GATHERER && (
+                                                <p className="mt-1 mb-0 text-[9px] text-[#7f9c87]">
+                                                    Production +{denizen.gatheringPower.toFixed(1)}/sec
+                                                </p>
+                                            )}
                                         </div>
                                         <span
                                             className={`rounded-full px-2 py-1 text-[8px] font-bold uppercase ${assignedRoom ? "bg-[#6f9f73]/12 text-[#8fc394]" : "bg-[#d8aa4f]/10 text-[#dabb72]"}`}
@@ -148,6 +171,26 @@ export function DenizenPanel({
                                                 : "Unassigned"}
                                         </span>
                                     </div>
+
+                                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/35">
+                                        <div
+                                            className={`h-full rounded-full transition-[width] duration-200 ${
+                                                denizen.health <= 0
+                                                    ? "bg-[#8a4650]"
+                                                    : denizen.health / denizen.maxHealth <= 0.35
+                                                      ? "bg-[#d46550]"
+                                                      : "bg-linear-to-r from-[#7d4ca6] to-[#b47ad5]"
+                                            }`}
+                                            style={{
+                                                width: `${Math.max(0, Math.min(100, (denizen.health / denizen.maxHealth) * 100))}%`,
+                                            }}
+                                        />
+                                    </div>
+                                    {denizen.recoveryRemainingMs > 0 && (
+                                        <p className="mt-1.5 mb-0 text-[8px] font-bold text-[#c47d76] uppercase">
+                                            Recovering · {Math.ceil(denizen.recoveryRemainingMs / 1000)}s
+                                        </p>
+                                    )}
 
                                     {assignedRoom ? (
                                         <button
@@ -169,7 +212,7 @@ export function DenizenPanel({
                                                     assignmentLocked ||
                                                     availableRooms.length === 0
                                                 }
-                                                onChange={(event) =>
+                                                onChange={(event: { target: { value: string } }) =>
                                                     setSelectedRooms(
                                                         (current) => ({
                                                             ...current,
