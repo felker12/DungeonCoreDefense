@@ -45,7 +45,7 @@ export function RoomAttackersPanel({
 
     return (
         <aside
-            className="pointer-events-auto absolute top-3.5 left-3.5 z-20 flex max-h-[min(520px,calc(100%_-_28px))] w-[min(390px,calc(100%_-_28px))] flex-col overflow-hidden rounded-2xl border border-[#c98f65]/30 bg-[linear-gradient(155deg,rgba(35,22,29,.97),rgba(14,11,17,.96))] text-[#eee7df] shadow-[0_22px_65px_rgba(0,0,0,.48),inset_0_1px_rgba(255,255,255,.04)] backdrop-blur-md"
+            className="pointer-events-auto absolute top-3.5 left-3.5 z-20 flex max-h-[min(520px,calc(100%-28px))] w-[min(390px,calc(100%-28px))] flex-col overflow-hidden rounded-2xl border border-[#c98f65]/30 bg-[linear-gradient(155deg,rgba(35,22,29,.97),rgba(14,11,17,.96))] text-[#eee7df] shadow-[0_22px_65px_rgba(0,0,0,.48),inset_0_1px_rgba(255,255,255,.04)] backdrop-blur-md"
             aria-label={`Attackers fighting in ${roomName}`}
         >
             <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/8 px-4 py-3.5">
@@ -58,7 +58,9 @@ export function RoomAttackersPanel({
                     </h2>
                     <p className="mt-1 mb-0 text-[9px] text-[#9e9098]">
                         {snapshot.totalAttackers}{" "}
-                        {snapshot.totalAttackers === 1 ? "attacker" : "attackers"}
+                        {snapshot.totalAttackers === 1
+                            ? "attacker"
+                            : "attackers"}
                         {" · "}
                         {partyCount} {partyCount === 1 ? "party" : "parties"}
                     </p>
@@ -81,11 +83,12 @@ export function RoomAttackersPanel({
                             className="overflow-hidden rounded-xl border border-white/8 bg-black/18"
                         >
                             <div className="flex items-center justify-between gap-3 border-b border-white/7 bg-white/3 px-3 py-2">
-                                <strong className="text-[9px] font-extrabold tracking-[.1em] text-[#cbbdca] uppercase">
+                                <strong className="text-[9px] font-extrabold tracking-widest text-[#cbbdca] uppercase">
                                     {getPartyLabel(party.partyId, partyIndex)}
                                 </strong>
                                 <span className="text-[8px] font-bold text-[#776d77]">
-                                    Wave {party.waveNumber} · {party.attackers.length}
+                                    Wave {party.waveNumber} ·{" "}
+                                    {party.attackers.length}
                                 </span>
                             </div>
 
@@ -132,7 +135,8 @@ function AttackerRow({ attacker }: { attacker: RoomAttackerSnapshot }) {
                             {meta.label}
                         </strong>
                         <span className="shrink-0 text-[10px] font-bold text-[#f1e8e0]">
-                            {Math.ceil(attacker.health)} / {attacker.maxHealth} HP
+                            {Math.ceil(attacker.health)} / {attacker.maxHealth}{" "}
+                            HP
                         </span>
                     </div>
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/40">
@@ -157,3 +161,4 @@ function getPartyLabel(partyId: string, fallbackIndex: number): string {
     const match = partyId.match(/party-(\d+)$/i);
     return `Party ${match?.[1] ?? fallbackIndex + 1}`;
 }
+

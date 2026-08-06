@@ -15,6 +15,7 @@ import { EventBus } from "../EventBus";
 import { DungeonPathfinder } from "../pathfinding/DungeonPathfinder";
 import { createSeededRandom } from "./SeededRandom";
 import type { AdventurerParty } from "./PartyData";
+import { getAdventurerCombatStats } from "./AdventurerDefinitions";
 
 export type WaveState =
     | "waiting"
@@ -401,7 +402,8 @@ export class WaveManager {
         const adventurerClass =
             CLASSES[Math.floor(this.random() * CLASSES.length)];
         const level = 1 + Math.floor((this.status.waveNumber - 1) / 3);
-        const maxHealth = 80 + level * 20;
+        const stats = getAdventurerCombatStats(adventurerClass, level);
+
         return {
             id: `wave-${this.status.waveNumber}-adventurer-${index + 1}`,
             class: adventurerClass,
@@ -409,13 +411,13 @@ export class WaveManager {
             position: { x: 0, y: 0 },
             size: { width: 30, height: 30 },
             level,
-            health: maxHealth,
-            maxHealth,
-            attack: 8 + level * 3,
-            defense: 4 + level * 2,
+            health: stats.maxHealth,
+            maxHealth: stats.maxHealth,
+            attack: stats.attack,
+            defense: stats.defense,
             currentRoomId: entranceId,
-            xpReward: 10 * level,
-            essenceReward: 5 * level,
+            xpReward: stats.xpReward,
+            essenceReward: stats.essenceReward,
         };
     }
 
