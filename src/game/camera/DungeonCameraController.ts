@@ -111,14 +111,29 @@ export class DungeonCameraController {
             1,
         );
 
-        this.targetZoom = PhaserMath.Clamp(
-            fitZoom,
-            this.minZoom,
-            this.maxZoom,
-        );
+        this.targetZoom = PhaserMath.Clamp(fitZoom, this.minZoom, this.maxZoom);
         camera.setZoom(this.targetZoom);
         this.refreshWorldBounds();
         camera.centerOn(this.focusBounds.centerX, this.focusBounds.centerY);
+    }
+
+    /**
+     * Refresh the camera's focus and panning bounds after the dungeon map grows.
+     * The current zoom and position are preserved unless recentering is requested.
+     */
+    public updateFocusBounds(
+        bounds: Geom.Rectangle,
+        centerOnDungeon = false,
+    ): void {
+        this.focusBounds.setTo(bounds.x, bounds.y, bounds.width, bounds.height);
+        this.refreshWorldBounds();
+
+        if (centerOnDungeon) {
+            this.scene.cameras.main.centerOn(
+                this.focusBounds.centerX,
+                this.focusBounds.centerY,
+            );
+        }
     }
 
     private configureCamera(): void {

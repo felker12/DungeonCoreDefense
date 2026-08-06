@@ -2,20 +2,28 @@
 
 import { GameObjects, Geom, Scene } from "phaser";
 import type { DungeonMap } from "../components/mapComponents/DungeonMap";
+import type { DungeonConnection } from "../components/mapComponents/DungeonConnection";
+import type { DungeonRoom } from "../components/mapComponents/DungeonRoom";
 import { CorridorView } from "./CorridorView";
 import { RoomView } from "./RoomView";
 
 export class DungeonMapView extends GameObjects.Container {
     private readonly roomViews = new Map<string, RoomView>();
+    private readonly corridorViews = new Map<string, CorridorView>();
 
-    constructor(scene: Scene, dungeon: DungeonMap) {
+    constructor(
+        scene: Scene,
+        private readonly dungeon: DungeonMap,
+    ) {
         super(scene, 0, 0);
         scene.add.existing(this);
 
         const roomsById = new Map(dungeon.rooms.map((room) => [room.id, room]));
 
         for (const connection of dungeon.connections) {
-            this.add(new CorridorView(scene, connection, roomsById));
+            const view = new CorridorView(scene, connection, roomsById);
+            this.corridorViews.set(connection.id, view);
+            this.add(view);
         }
 
         for (const room of dungeon.rooms) {
@@ -23,6 +31,34 @@ export class DungeonMapView extends GameObjects.Container {
             this.roomViews.set(room.id, view);
             this.add(view);
         }
+    }
+
+    addRoom(room: DungeonRoom): void {
+        if (this.roomViews.has(room.id)) return;
+
+        const view = new RoomView(this.scene, room);
+        this.roomViews.set(room.id, view);
+        this.add(view);
+    }
+
+    addConnection(connection: DungeonConnection): void {
+        if (this.corridorViews.has(connection.id)) return;
+
+        const roomsById = new Map(
+            this.dungeon.rooms.map((room) => [room.id, room]),
+        );
+        const view = new CorridorView(this.scene, connection, roomsById);
+        this.corridorViews.set(connection.id, view);
+        this.add(view);
+        this.sendToBack(view);
+    }
+
+    removeConnection(connectionId: string): void {
+        const view = this.corridorViews.get(connectionId);
+        if (!view) return;
+
+        this.corridorViews.delete(connectionId);
+        this.remove(view, true);
     }
 
     selectRoom(roomId: string): void {

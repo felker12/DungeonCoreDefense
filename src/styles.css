@@ -1,7 +1,4 @@
 @import "tailwindcss";
-
-/* Keep Tailwind v4 aware of both panel entry points when these files are
-   copied into the project independently. */
 @source "./App.tsx";
 @source "./game/components/**/*.tsx";
 
@@ -441,5 +438,50 @@
         width: 25px;
         height: 25px;
     }
+    .level-popover {
+        right: 12px;
+    }
 }
 
+@media (max-width: 640px) {
+    .map-column {
+        grid-template-rows: 58px minmax(0, 1fr);
+    }
+    .resource-cell {
+        min-width: 116px;
+        padding: 0 12px;
+    }
+    .resource-cell-power {
+        min-width: 150px;
+    }
+    .resource-cell-level {
+        min-width: 142px;
+    }
+    .resource-icon {
+        width: 25px;
+        height: 25px;
+    }
+    .level-popover {
+        right: 12px;
+    }
+}
+
+@media (max-width: 640px) {
+    .map-column {
+        grid-template-rows: 58px minmax(0, 1fr);
+    }
+    .resource-cell {
+        min-width: 116px;
+        padding: 0 12px;
+    }
+    .resource-cell-power {
+        min-width: 150px;
+    }
+    .resource-cell-level {
+        min-width: 142px;
+    }
+    .resource-icon {
+        width: 25px;
+        height: 25px;
+    }
+}

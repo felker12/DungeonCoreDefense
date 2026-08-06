@@ -16,6 +16,7 @@ interface NextDungeonLevel {
     waveDefeated: boolean;
     costs: { resource: string; current: number; required: number }[];
     denizenCapacityReward: number;
+    roomCapacityReward: number;
 }
 
 interface ResourceBarProps {
@@ -122,7 +123,8 @@ export function ResourceBar({
                                 </div>
                                 <p className="level-reward">
                                     Reward: +{nextLevel.denizenCapacityReward}{" "}
-                                    denizen capacity
+                                    denizen capacity · +
+                                    {nextLevel.roomCapacityReward} room capacity
                                 </p>
                                 <button
                                     type="button"

@@ -1,4 +1,4 @@
-import type { Scene } from "phaser";
+import type { Scene, Time } from "phaser";
 import type { EntityId } from "../components/DungeonData";
 import {
     AdventurerClass,
@@ -15,10 +15,16 @@ import { DungeonPathfinder } from "../pathfinding/DungeonPathfinder";
 import { createSeededRandom } from "./SeededRandom";
 import type { AdventurerParty } from "./PartyData";
 
-export type WaveState = "waiting" | "spawning" | "advancing" | "completed";
+export type WaveState =
+    | "waiting"
+    | "spawning"
+    | "advancing"
+    | "completed"
+    | "failed";
 
 export interface WaveStatus {
     waveNumber: number;
+    completedWaves: number;
     state: WaveState;
     totalAdventurers: number;
     remainingAdventurers: number;
@@ -41,10 +47,17 @@ export interface WaveManagerOptions {
 
 const CLASSES = Object.values(AdventurerClass);
 
+interface PartyPlan {
+    partyIndex: number;
+    partySize: number;
+    firstAdventurerIndex: number;
+}
+
 export class WaveManager {
-    private readonly pathfinder: DungeonPathfinder;
-    private readonly roomsById: ReadonlyMap<EntityId, DungeonRoom>;
-    private readonly random: () => number;
+    private pathfinder: DungeonPathfinder;
+    private roomsById: ReadonlyMap<EntityId, DungeonRoom>;
+    private random: () => number;
+    private readonly seed?: number;
     private readonly partySpawnInterval: number;
     private readonly minPartySize: number;
     private readonly startingMaxPartySize: number;
@@ -55,9 +68,14 @@ export class WaveManager {
     private readonly quadraticWaveGrowth: number;
     private readonly wrongTurnChance: number;
     private readonly controllers = new Set<PartyController>();
+    private readonly pendingSpawnTimers = new Set<Time.TimerEvent>();
     private partiesWaitingToSpawn = 0;
+    private currentWavePlan: readonly PartyPlan[] = [];
+    private activeRunId = 0;
+    private completedWaveCount = 0;
     private status: WaveStatus = {
         waveNumber: 0,
+        completedWaves: 0,
         state: "waiting",
         totalAdventurers: 0,
         remainingAdventurers: 0,
@@ -73,6 +91,7 @@ export class WaveManager {
     ) {
         this.pathfinder = new DungeonPathfinder(dungeon);
         this.roomsById = new Map(dungeon.rooms.map((room) => [room.id, room]));
+        this.seed = options.seed;
         this.random =
             options.seed === undefined
                 ? Math.random
@@ -121,38 +140,56 @@ export class WaveManager {
     startNextWave(): boolean {
         if (
             this.destroyed ||
-            this.status.state === "spawning" ||
-            this.status.state === "advancing"
+            this.isActive() ||
+            this.status.state === "failed"
         ) {
             return false;
         }
 
-        const waveNumber = this.status.waveNumber + 1;
+        const waveNumber = this.completedWaveCount + 1;
         const waveCapacity = this.getWaveCapacity(waveNumber);
         const maximumPartySize = this.getMaxPartySize(waveNumber);
         const partySizes = this.partitionWaveCapacity(
             waveCapacity,
             maximumPartySize,
         );
-        this.status = {
-            waveNumber,
-            state: "spawning",
-            totalAdventurers: waveCapacity,
-            remainingAdventurers: waveCapacity,
-            totalParties: partySizes.length,
-            remainingParties: partySizes.length,
-        };
-        this.partiesWaitingToSpawn = partySizes.length;
-        this.emitStatus();
-
         let adventurerIndex = 0;
-        const partyPlans = partySizes.map((partySize, partyIndex) => {
+        this.currentWavePlan = partySizes.map((partySize, partyIndex) => {
             const firstAdventurerIndex = adventurerIndex;
             adventurerIndex += partySize;
             return { partyIndex, partySize, firstAdventurerIndex };
         });
 
-        this.spawnPartiesSequentially(partyPlans);
+        return this.beginWave(waveNumber, this.currentWavePlan);
+    }
+
+    retryCurrentWave(): boolean {
+        if (
+            this.destroyed ||
+            this.status.state !== "failed" ||
+            this.currentWavePlan.length === 0
+        ) {
+            return false;
+        }
+
+        return this.beginWave(this.status.waveNumber, this.currentWavePlan);
+    }
+
+    failCurrentWave(): boolean {
+        if (!this.isActive() || this.destroyed) return false;
+
+        this.activeRunId += 1;
+        this.cancelPendingSpawns();
+        this.destroyActiveControllers();
+        this.partiesWaitingToSpawn = 0;
+        this.status = {
+            ...this.status,
+            completedWaves: this.completedWaveCount,
+            state: "failed",
+            remainingAdventurers: 0,
+            remainingParties: 0,
+        };
+        this.emitStatus();
         return true;
     }
 
@@ -168,20 +205,66 @@ export class WaveManager {
     }
 
     getCompletedWaveCount(): number {
-        return Math.max(0, this.status.waveNumber - (this.isActive() ? 1 : 0));
+        return this.completedWaveCount;
+    }
+
+    refreshTopology(): boolean {
+        if (this.isActive() || this.destroyed) return false;
+
+        this.pathfinder = new DungeonPathfinder(this.dungeon);
+        this.roomsById = new Map(
+            this.dungeon.rooms.map((room) => [room.id, room]),
+        );
+        return true;
     }
 
     destroy(): void {
         this.destroyed = true;
-        for (const controller of this.controllers) controller.destroy();
-        this.controllers.clear();
+        this.activeRunId += 1;
+        this.cancelPendingSpawns();
+        this.destroyActiveControllers();
+    }
+
+    private beginWave(
+        waveNumber: number,
+        partyPlans: readonly PartyPlan[],
+    ): boolean {
+        if (this.destroyed || this.isActive() || partyPlans.length === 0) {
+            return false;
+        }
+
+        this.activeRunId += 1;
+        const runId = this.activeRunId;
+        if (this.seed !== undefined) {
+            this.random = createSeededRandom(this.seed + waveNumber * 9_973);
+        }
+        const totalAdventurers = partyPlans.reduce(
+            (total, plan) => total + plan.partySize,
+            0,
+        );
+        this.status = {
+            waveNumber,
+            completedWaves: this.completedWaveCount,
+            state: "spawning",
+            totalAdventurers,
+            remainingAdventurers: totalAdventurers,
+            totalParties: partyPlans.length,
+            remainingParties: partyPlans.length,
+        };
+        this.partiesWaitingToSpawn = partyPlans.length;
+        this.emitStatus();
+        this.spawnPartiesSequentially(partyPlans, 0, runId);
+        return true;
     }
 
     private spawnParty(
         partyIndex: number,
         partySize: number,
         firstAdventurerIndex: number,
+        runId: number,
     ): void {
+        if (runId !== this.activeRunId || !this.isActive()) return;
+
         const route = this.pathfinder.chooseRouteWithWrongTurn(
             this.random,
             this.wrongTurnChance,
@@ -221,7 +304,7 @@ export class WaveManager {
             EventBus.emit("adventurer-spawned", { adventurer, route });
 
         void controller.advance().then(() => {
-            if (this.destroyed) return;
+            if (this.destroyed || runId !== this.activeRunId) return;
             this.controllers.delete(controller);
             this.status.remainingAdventurers -= party.members.length;
             this.status.remainingParties -= 1;
@@ -230,33 +313,63 @@ export class WaveManager {
                 this.partiesWaitingToSpawn === 0
             ) {
                 this.status.state = "completed";
+                this.completedWaveCount = this.status.waveNumber;
+                this.status.completedWaves = this.completedWaveCount;
             }
             this.emitStatus();
         });
     }
 
     private spawnPartiesSequentially(
-        partyPlans: readonly {
-            partyIndex: number;
-            partySize: number;
-            firstAdventurerIndex: number;
-        }[],
-        planIndex = 0,
+        partyPlans: readonly PartyPlan[],
+        planIndex: number,
+        runId: number,
     ): void {
-        if (this.destroyed || planIndex >= partyPlans.length) return;
+        if (
+            this.destroyed ||
+            runId !== this.activeRunId ||
+            !this.isActive() ||
+            planIndex >= partyPlans.length
+        ) {
+            return;
+        }
 
         const plan = partyPlans[planIndex];
         this.spawnParty(
             plan.partyIndex,
             plan.partySize,
             plan.firstAdventurerIndex,
+            runId,
         );
 
         if (planIndex + 1 < partyPlans.length) {
-            this.scene.time.delayedCall(this.partySpawnInterval, () => {
-                this.spawnPartiesSequentially(partyPlans, planIndex + 1);
-            });
+            const timer = this.scene.time.delayedCall(
+                this.partySpawnInterval,
+                () => {
+                    this.pendingSpawnTimers.delete(timer);
+                    this.spawnPartiesSequentially(
+                        partyPlans,
+                        planIndex + 1,
+                        runId,
+                    );
+                },
+            );
+            this.pendingSpawnTimers.add(timer);
         }
+    }
+
+    private cancelPendingSpawns(): void {
+        for (const timer of this.pendingSpawnTimers) {
+            timer.remove(false);
+        }
+        this.pendingSpawnTimers.clear();
+    }
+
+    private destroyActiveControllers(): void {
+        for (const controller of this.controllers) {
+            controller.destroy();
+        }
+        this.controllers.clear();
     }
 
     private createAdventurer(

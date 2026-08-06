@@ -5,6 +5,8 @@ import { DenizenPanel } from "./game/components/DenizenPanel";
 import { PhaserGame, type IRefPhaserGame } from "./PhaserGame";
 import type { DenizenType } from "./game/components/entityComponents/entityData";
 import type { DungeonRoom } from "./game/components/mapComponents/DungeonRoom";
+import type { CardinalDirection } from "./game/components/mapComponents/DungeonRoom";
+import type { BuildableRoomType } from "./game/construction/DungeonConstruction";
 import { EventBus } from "./game/EventBus";
 import type {
     DenizenRosterSnapshot,
@@ -13,6 +15,7 @@ import type {
 } from "./game/rooms/RoomPopulationManager";
 import {
     DungeonScene,
+    type DungeonConstructionSnapshot,
     type DenizenRoomOption,
     type DungeonProgressionSnapshot,
     type RoomDetails,
@@ -20,14 +23,31 @@ import {
 import type { WaveStatus } from "./game/waves/WaveManager";
 import type { ResourceSnapshot } from "./game/resources/ResourceManager";
 import { StatsPanel } from "./game/components/StatsPanel";
+import { DungeonCoreStatus } from "./game/components/DungeonCoreStatus";
+import type { DungeonCoreSnapshot } from "./game/core/DungeonCoreManager";
 
 const INITIAL_STATUS: WaveStatus = {
     waveNumber: 0,
+    completedWaves: 0,
     state: "waiting",
     totalAdventurers: 0,
     remainingAdventurers: 0,
     totalParties: 0,
     remainingParties: 0,
+};
+
+const INITIAL_CORE: DungeonCoreSnapshot = {
+    health: 300,
+    maxHealth: 300,
+    defense: 5,
+    state: "stable",
+    raidStartHealth: null,
+    regenerationPerSecond: 0.75,
+    regenerationCap: 180,
+    regenerationCapPercent: 0.6,
+    retryHealth: null,
+    lastDamage: 0,
+    lastAttackerCount: 0,
 };
 
 const INITIAL_RESOURCES: ResourceSnapshot = {
@@ -63,6 +83,7 @@ const INITIAL_PROGRESSION: DungeonProgressionSnapshot = {
             { resource: "essence", amount: 50 },
         ],
         denizenCapacityReward: 2,
+        roomCapacityReward: 2,
     },
 };
 
@@ -70,6 +91,7 @@ type PanelTab = "room" | "denizens" | "stats";
 
 function App() {
     const [wave, setWave] = useState(INITIAL_STATUS);
+    const [core, setCore] = useState(INITIAL_CORE);
     const [resourceState, setResourceState] = useState(INITIAL_RESOURCES);
     const [denizenRoster, setDenizenRoster] = useState(INITIAL_ROSTER);
     const [denizenRooms, setDenizenRooms] = useState<
@@ -79,6 +101,8 @@ function App() {
         useState<DungeonProgressionSnapshot>(INITIAL_PROGRESSION);
     const [sceneReady, setSceneReady] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<RoomDetails | null>(null);
+    const [construction, setConstruction] =
+        useState<DungeonConstructionSnapshot | null>(null);
     const [panelOpen, setPanelOpen] = useState(true);
     const phaserRef = useRef<IRefPhaserGame>(null);
     const dungeonSceneRef = useRef<DungeonScene | null>(null);
@@ -89,6 +113,15 @@ function App() {
         EventBus.on("wave-status-changed", handleStatus);
         return () => {
             EventBus.off("wave-status-changed", handleStatus);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleCore = (snapshot: DungeonCoreSnapshot): void =>
+            setCore(snapshot);
+        EventBus.on("dungeon-core-changed", handleCore);
+        return () => {
+            EventBus.off("dungeon-core-changed", handleCore);
         };
     }, []);
 
@@ -135,6 +168,10 @@ function App() {
         };
         const handleSelected = (room: DungeonRoom): void => {
             refreshRoom(room.id);
+            setConstruction(
+                dungeonSceneRef.current?.getRoomConstructionSnapshot(room.id) ??
+                    null,
+            );
             setPanelOpen(true);
             setActiveTab("room");
         };
@@ -153,17 +190,45 @@ function App() {
         };
         EventBus.on("room-selected", handleSelected);
         EventBus.on("room-population-changed", handlePopulation);
+        const handleConstruction = (
+            snapshot: DungeonConstructionSnapshot | null,
+        ): void => {
+            setConstruction((current) => {
+                const roomId =
+                    snapshot?.selectedRoomId ?? current?.selectedRoomId;
+                return roomId
+                    ? (dungeonSceneRef.current?.getRoomConstructionSnapshot(
+                          roomId,
+                      ) ?? null)
+                    : null;
+            });
+            setSelectedRoom((current) =>
+                current
+                    ? (dungeonSceneRef.current?.getRoomDetails(
+                          current.room.id,
+                      ) ?? current)
+                    : current,
+            );
+            setDenizenRooms(
+                dungeonSceneRef.current?.getDenizenRoomOptions() ?? [],
+            );
+        };
+        EventBus.on("dungeon-construction-changed", handleConstruction);
         return () => {
             EventBus.off("room-selected", handleSelected);
             EventBus.off("room-population-changed", handlePopulation);
+            EventBus.off("dungeon-construction-changed", handleConstruction);
         };
     }, []);
 
     const waveActive = wave.state === "spawning" || wave.state === "advancing";
+    const waveFailed = wave.state === "failed";
     const handleSceneReady = useCallback((scene: Phaser.Scene): void => {
         if (!(scene instanceof DungeonScene)) return;
 
         dungeonSceneRef.current = scene;
+        setWave(scene.getWaveStatus());
+        setCore(scene.getDungeonCoreStatus());
         setDenizenRoster(scene.getDenizenRoster());
         setDenizenRooms(scene.getDenizenRoomOptions());
         setProgression(scene.getDungeonProgression());
@@ -186,7 +251,27 @@ function App() {
     const unassignDenizen = (denizenId: string): boolean =>
         !waveActive && (getScene()?.unassignDenizen(denizenId) ?? false);
 
-    const completedWaves = Math.max(0, wave.waveNumber - (waveActive ? 1 : 0));
+    const buildRoom = (
+        roomType: BuildableRoomType,
+        direction: CardinalDirection,
+    ): boolean =>
+        Boolean(
+            selectedRoom &&
+            !waveActive &&
+            getScene()?.buildRoom(selectedRoom.room.id, roomType, direction),
+        );
+
+    const addConnection = (roomId: string): boolean =>
+        Boolean(
+            selectedRoom &&
+            !waveActive &&
+            getScene()?.addConnectionBetweenRooms(selectedRoom.room.id, roomId),
+        );
+
+    const removeConnection = (connectionId: string): boolean =>
+        !waveActive && (getScene()?.removeConnection(connectionId) ?? false);
+
+    const completedWaves = wave.completedWaves;
     const expansion = progression.nextExpansion;
 
     return (
@@ -231,6 +316,7 @@ function App() {
                             required: cost.amount,
                         })),
                         denizenCapacityReward: expansion.denizenCapacityReward,
+                        roomCapacityReward: expansion.roomCapacityReward,
                     }}
                     expansionLocked={waveActive}
                     onExpandDungeon={() => getScene()?.expandDungeon()}
@@ -297,18 +383,28 @@ function App() {
                                     />
                                 </div>
                             </div>
+                            <DungeonCoreStatus
+                                core={core}
+                                raidActive={waveActive}
+                            />
                             <button
                                 type="button"
                                 disabled={!sceneReady || waveActive}
-                                onClick={() => getScene()?.startNextWave()}
+                                onClick={() =>
+                                    waveFailed
+                                        ? getScene()?.retryCurrentWave()
+                                        : getScene()?.startNextWave()
+                                }
                                 className="mt-4 flex w-full cursor-pointer items-center justify-between rounded-[10px] border border-[#f1cf78] bg-linear-to-br from-[#e3be64] to-[#c9953d] py-2.5 pr-3 pl-4 text-[13px] font-extrabold text-[#20170d] shadow-[0_8px_25px_rgba(180,126,38,.14),inset_0_1px_rgba(255,255,255,.35)] transition hover:-translate-y-px hover:brightness-110 disabled:cursor-not-allowed disabled:border-[#37313b] disabled:bg-none disabled:bg-[#27222b] disabled:text-[#716b74] disabled:shadow-none"
                             >
                                 <span>
                                     {!sceneReady
                                         ? "Loading Dungeon…"
-                                        : wave.waveNumber === 0
-                                          ? "Start First Wave"
-                                          : "Start Next Wave"}
+                                        : waveFailed
+                                          ? `Retry Wave ${wave.waveNumber}`
+                                          : wave.waveNumber === 0
+                                            ? "Start First Wave"
+                                            : "Start Next Wave"}
                                 </span>
                                 <b className="text-lg leading-none">→</b>
                             </button>
@@ -387,6 +483,7 @@ function App() {
                                     roster={denizenRoster}
                                     resources={resourceState.resources}
                                     assignmentLocked={waveActive}
+                                    construction={construction}
                                     onUpgrade={upgradeRoom}
                                     onAssign={(denizenId) =>
                                         assignDenizen(
@@ -395,6 +492,9 @@ function App() {
                                         )
                                     }
                                     onUnassign={unassignDenizen}
+                                    onBuildRoom={buildRoom}
+                                    onAddConnection={addConnection}
+                                    onRemoveConnection={removeConnection}
                                     onClose={() => setSelectedRoom(null)}
                                 />
                             ) : (

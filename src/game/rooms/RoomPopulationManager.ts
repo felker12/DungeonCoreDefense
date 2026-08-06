@@ -7,6 +7,7 @@ import {
 import type { DungeonMap } from "../components/mapComponents/DungeonMap";
 import {
     DungeonRoomType,
+    type DungeonRoom,
     type RoomCapacity,
 } from "../components/mapComponents/DungeonRoom";
 import { EventBus } from "../EventBus";
@@ -57,6 +58,17 @@ export class RoomPopulationManager {
             if (capacity) this.capacities.set(room.id, capacity);
         }
         for (const denizen of denizens) this.denizens.set(denizen.id, denizen);
+    }
+
+    registerRoom(room: DungeonRoom): boolean {
+        if (this.capacities.has(room.id)) return false;
+
+        const capacity = createInitialRoomCapacity(room);
+        if (!capacity) return true;
+
+        this.capacities.set(room.id, capacity);
+        this.emitRoom(room.id);
+        return true;
     }
 
     addDenizen(denizen: DenizenData): boolean {
