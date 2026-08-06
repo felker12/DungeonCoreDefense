@@ -107,6 +107,7 @@ function App() {
     const phaserRef = useRef<IRefPhaserGame>(null);
     const dungeonSceneRef = useRef<DungeonScene | null>(null);
     const [activeTab, setActiveTab] = useState<PanelTab>("room");
+    const [mobileRaidOpen, setMobileRaidOpen] = useState(false);
 
     useEffect(() => {
         const handleStatus = (status: WaveStatus): void => setWave(status);
@@ -194,17 +195,19 @@ function App() {
             snapshot: DungeonConstructionSnapshot | null,
         ): void => {
             setConstruction((current) => {
-                const roomId = snapshot?.selectedRoomId ?? current?.selectedRoomId;
+                const roomId =
+                    snapshot?.selectedRoomId ?? current?.selectedRoomId;
                 return roomId
-                    ? dungeonSceneRef.current?.getRoomConstructionSnapshot(
+                    ? (dungeonSceneRef.current?.getRoomConstructionSnapshot(
                           roomId,
-                      ) ?? null
+                      ) ?? null)
                     : null;
             });
             setSelectedRoom((current) =>
                 current
-                    ? dungeonSceneRef.current?.getRoomDetails(current.room.id) ??
-                      current
+                    ? (dungeonSceneRef.current?.getRoomDetails(
+                          current.room.id,
+                      ) ?? current)
                     : current,
             );
             setDenizenRooms(
@@ -255,37 +258,54 @@ function App() {
     ): boolean =>
         Boolean(
             selectedRoom &&
-                !waveActive &&
-                getScene()?.buildRoom(
-                    selectedRoom.room.id,
-                    roomType,
-                    direction,
-                ),
+            !waveActive &&
+            getScene()?.buildRoom(selectedRoom.room.id, roomType, direction),
         );
 
     const addConnection = (roomId: string): boolean =>
         Boolean(
             selectedRoom &&
-                !waveActive &&
-                getScene()?.addConnectionBetweenRooms(
-                    selectedRoom.room.id,
-                    roomId,
-                ),
+            !waveActive &&
+            getScene()?.addConnectionBetweenRooms(selectedRoom.room.id, roomId),
         );
 
     const removeConnection = (connectionId: string): boolean =>
-        !waveActive &&
-        (getScene()?.removeConnection(connectionId) ?? false);
+        !waveActive && (getScene()?.removeConnection(connectionId) ?? false);
 
     const moveCore = (): boolean =>
         Boolean(
             selectedRoom &&
-                !waveActive &&
-                getScene()?.moveCoreToRoom(selectedRoom.room.id),
+            !waveActive &&
+            getScene()?.moveCoreToRoom(selectedRoom.room.id),
         );
 
     const completedWaves = wave.completedWaves;
     const expansion = progression.nextExpansion;
+
+    const runWaveAction = (): void => {
+        if (waveFailed) {
+            getScene()?.retryCurrentWave();
+            return;
+        }
+
+        getScene()?.startNextWave();
+    };
+
+    const waveActionLabel = !sceneReady
+        ? "Loading…"
+        : waveFailed
+          ? `Retry Wave ${wave.waveNumber}`
+          : wave.waveNumber === 0
+            ? "Start First Wave"
+            : "Start Next Wave";
+
+    const compactWaveActionLabel = !sceneReady
+        ? "Loading"
+        : waveFailed
+          ? "Retry Wave"
+          : wave.waveNumber === 0
+            ? "Start Wave"
+            : "Next Wave";
 
     return (
         <main className="game-shell-react">
@@ -351,7 +371,7 @@ function App() {
             >
                 <button
                     type="button"
-                    className={`absolute right-3.5 z-20 grid size-8.5 cursor-pointer place-items-center rounded-lg border border-white/10 bg-white/5 p-0 text-[22px] leading-none text-[#c8bdcd] transition hover:border-[#ddb966]/35 hover:bg-[#ddb966]/10 hover:text-[#fff7e6] ${panelOpen ? "top-3.5" : "top-1/2 -translate-y-1/2"}`}
+                    className={`command-panel-toggle absolute right-3.5 z-20 grid size-8.5 cursor-pointer place-items-center rounded-lg border border-white/10 bg-white/5 p-0 text-[22px] leading-none text-[#c8bdcd] transition hover:border-[#ddb966]/35 hover:bg-[#ddb966]/10 hover:text-[#fff7e6] ${panelOpen ? "top-3.5" : "top-1/2 -translate-y-1/2"}`}
                     onClick={() => setPanelOpen((open) => !open)}
                     aria-label={
                         panelOpen
@@ -359,117 +379,159 @@ function App() {
                             : "Expand interface panel"
                     }
                 >
-                    {panelOpen ? "›" : "‹"}
+                    <span
+                        className="command-panel-chevron"
+                        aria-hidden="true"
+                    />
                 </button>
 
                 {panelOpen && (
-                    <div className="relative z-1 flex min-h-0 flex-1 flex-col">
-                        <header className="border-b border-white/8 py-5 pr-14 pl-5.5">
-                            <div className="text-[11px] font-extrabold tracking-[.18em] text-[#d9b766] uppercase">
-                                <span className="mr-2 text-[#8f61c8]">◆</span>{" "}
-                                Dungeon command
+                    <div className="command-panel-inner relative z-1 flex min-h-0 flex-1 flex-col">
+                        <header className="command-panel-header border-b border-white/8 py-5 pr-14 pl-5.5">
+                            <div className="command-panel-heading-row">
+                                <div className="text-[11px] font-extrabold tracking-[.18em] text-[#d9b766] uppercase">
+                                    <span className="mr-2 text-[#8f61c8]">
+                                        ◆
+                                    </span>{" "}
+                                    Dungeon command
+                                </div>
+
+                                <div className="mobile-command-actions">
+                                    {!mobileRaidOpen && (
+                                        <button
+                                            type="button"
+                                            className="mobile-wave-action"
+                                            disabled={!sceneReady || waveActive}
+                                            onClick={runWaveAction}
+                                            aria-label={waveActionLabel}
+                                        >
+                                            <span>
+                                                {compactWaveActionLabel}
+                                            </span>
+                                        </button>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        className="mobile-raid-toggle"
+                                        onClick={() =>
+                                            setMobileRaidOpen((open) => !open)
+                                        }
+                                        aria-expanded={mobileRaidOpen}
+                                        aria-controls="mobile-raid-controls"
+                                    >
+                                        <span className="mobile-raid-summary">
+                                            <strong>
+                                                Wave {wave.waveNumber || "—"}
+                                            </strong>
+                                            <span>
+                                                Core {Math.ceil(core.health)}/
+                                                {core.maxHealth}
+                                            </span>
+                                        </span>
+                                        <span
+                                            className="mobile-raid-chevron"
+                                            aria-hidden="true"
+                                        />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="mt-4 flex items-end justify-between gap-4.5">
-                                <div className="flex items-center gap-3">
-                                    <span
-                                        className={`status-orb size-2.5 shrink-0 rounded-full border-2 border-[#5d5264] bg-[#27212d] status-${wave.state}`}
-                                    />
-                                    <div>
-                                        <h1 className="m-0 font-serif text-[25px] leading-none tracking-tight text-[#fbf7ee]">
-                                            Wave {wave.waveNumber || "—"}
-                                        </h1>
-                                        <p className="mt-1.5 mb-0 text-xs text-[#908796] capitalize">
-                                            {wave.state}
-                                        </p>
+
+                            <div
+                                id="mobile-raid-controls"
+                                className={`command-panel-raid-details ${mobileRaidOpen ? "is-open" : ""}`}
+                            >
+                                <div className="mt-4 flex items-end justify-between gap-4.5">
+                                    <div className="flex items-center gap-3">
+                                        <span
+                                            className={`status-orb size-2.5 shrink-0 rounded-full border-2 border-[#5d5264] bg-[#27212d] status-${wave.state}`}
+                                        />
+                                        <div>
+                                            <h1 className="m-0 font-serif text-[25px] leading-none tracking-tight text-[#fbf7ee]">
+                                                Wave {wave.waveNumber || "—"}
+                                            </h1>
+                                            <p className="mt-1.5 mb-0 text-xs text-[#908796] capitalize">
+                                                {wave.state}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Metric
+                                            remaining={
+                                                wave.remainingAdventurers
+                                            }
+                                            total={wave.totalAdventurers}
+                                            label="Adventurers"
+                                        />
+                                        <Metric
+                                            remaining={wave.remainingParties}
+                                            total={wave.totalParties}
+                                            label="Parties"
+                                        />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Metric
-                                        remaining={wave.remainingAdventurers}
-                                        total={wave.totalAdventurers}
-                                        label="Adventurers"
-                                    />
-                                    <Metric
-                                        remaining={wave.remainingParties}
-                                        total={wave.totalParties}
-                                        label="Parties"
-                                    />
-                                </div>
+                                <DungeonCoreStatus
+                                    core={core}
+                                    raidActive={waveActive}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={!sceneReady || waveActive}
+                                    onClick={runWaveAction}
+                                    className="mt-4 flex w-full cursor-pointer items-center justify-between rounded-[10px] border border-[#f1cf78] bg-linear-to-br from-[#e3be64] to-[#c9953d] py-2.5 pr-3 pl-4 text-[13px] font-extrabold text-[#20170d] shadow-[0_8px_25px_rgba(180,126,38,.14),inset_0_1px_rgba(255,255,255,.35)] transition hover:-translate-y-px hover:brightness-110 disabled:cursor-not-allowed disabled:border-[#37313b] disabled:bg-none disabled:bg-[#27222b] disabled:text-[#716b74] disabled:shadow-none"
+                                >
+                                    <span>{waveActionLabel}</span>
+                                </button>
                             </div>
-                            <DungeonCoreStatus
-                                core={core}
-                                raidActive={waveActive}
-                            />
-                            <button
-                                type="button"
-                                disabled={!sceneReady || waveActive}
-                                onClick={() =>
-                                    waveFailed
-                                        ? getScene()?.retryCurrentWave()
-                                        : getScene()?.startNextWave()
-                                }
-                                className="mt-4 flex w-full cursor-pointer items-center justify-between rounded-[10px] border border-[#f1cf78] bg-linear-to-br from-[#e3be64] to-[#c9953d] py-2.5 pr-3 pl-4 text-[13px] font-extrabold text-[#20170d] shadow-[0_8px_25px_rgba(180,126,38,.14),inset_0_1px_rgba(255,255,255,.35)] transition hover:-translate-y-px hover:brightness-110 disabled:cursor-not-allowed disabled:border-[#37313b] disabled:bg-none disabled:bg-[#27222b] disabled:text-[#716b74] disabled:shadow-none"
-                            >
-                                <span>
-                                    {!sceneReady
-                                        ? "Loading Dungeon…"
-                                        : waveFailed
-                                          ? `Retry Wave ${wave.waveNumber}`
-                                        : wave.waveNumber === 0
-                                          ? "Start First Wave"
-                                          : "Start Next Wave"}
-                                </span>
-                                <b className="text-lg leading-none">→</b>
-                            </button>
                         </header>
 
-                        <nav className="grid grid-cols-4 border-b border-white/8 bg-black/15 px-3">
+                        <nav className="command-tabs grid grid-cols-4 border-b border-white/8 bg-black/15 px-3">
                             <button
                                 type="button"
                                 onClick={() => setActiveTab("room")}
-                                className={`relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold ${
+                                className={`command-tab relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold ${
                                     activeTab === "room"
                                         ? "panel-tab-active text-[#e7cb89]"
                                         : "text-[#77707c]"
                                 }`}
                             >
-                                <span>▦</span>
-                                Room
+                                <span className="command-tab-icon">▦</span>
+                                <span>Room</span>
                             </button>
 
                             <button
                                 type="button"
                                 onClick={() => setActiveTab("denizens")}
-                                className={`relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold ${
+                                className={`command-tab relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold ${
                                     activeTab === "denizens"
                                         ? "panel-tab-active text-[#e7cb89]"
                                         : "text-[#77707c] hover:text-[#bcb2c0]"
                                 }`}
                             >
-                                <span>♟</span>
-                                Denizens
+                                <span className="command-tab-icon">♟</span>
+                                <span>Denizens</span>
                             </button>
 
                             <button
                                 type="button"
-                                className="flex cursor-not-allowed items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold text-[#6f6874] opacity-50"
+                                className="command-tab flex cursor-not-allowed items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold text-[#6f6874] opacity-50"
                                 disabled
                             >
-                                <span>◇</span>
-                                Shop
+                                <span className="command-tab-icon">◇</span>
+                                <span>Shop</span>
                             </button>
 
                             <button
                                 type="button"
                                 onClick={() => setActiveTab("stats")}
-                                className={`relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold ${
+                                className={`command-tab relative flex cursor-pointer items-center justify-center gap-1.5 border-0 bg-transparent px-1 py-3 text-[10px] font-bold ${
                                     activeTab === "stats"
                                         ? "panel-tab-active text-[#e7cb89]"
                                         : "text-[#77707c] hover:text-[#bcb2c0]"
                                 }`}
                             >
-                                <span>▥</span>
-                                Stats
+                                <span className="command-tab-icon">▥</span>
+                                <span>Stats</span>
                             </button>
                         </nav>
 
