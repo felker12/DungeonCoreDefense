@@ -64,7 +64,7 @@ export const ROOM_CONSTRUCTION_CATALOG: readonly RoomConstructionDefinition[] =
         },
     ];
 
-const BASE_FUNCTIONAL_ROOM_LIMIT = 25;
+const BASE_FUNCTIONAL_ROOM_LIMIT = 5;
 const ROOM_LIMIT_PER_DUNGEON_LEVEL = 2;
 export const ROOM_GRID_SPACING = {
     horizontal: 300,

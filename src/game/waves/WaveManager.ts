@@ -471,3 +471,4 @@ function normalizeCompletedWaveCount(value: unknown): number {
         ? value
         : 0;
 }
+
