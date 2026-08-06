@@ -71,6 +71,50 @@ export class RoomPopulationManager {
         return true;
     }
 
+    swapRoomPopulation(firstRoomId: EntityId, secondRoomId: EntityId): boolean {
+        const firstRoom = this.dungeon.rooms.find(
+            (room) => room.id === firstRoomId,
+        );
+        const secondRoom = this.dungeon.rooms.find(
+            (room) => room.id === secondRoomId,
+        );
+        if (!firstRoom || !secondRoom || firstRoomId === secondRoomId) {
+            return false;
+        }
+
+        const firstCapacity = this.capacities.get(firstRoomId);
+        const secondCapacity = this.capacities.get(secondRoomId);
+        this.capacities.delete(firstRoomId);
+        this.capacities.delete(secondRoomId);
+        if (secondCapacity) this.capacities.set(firstRoomId, secondCapacity);
+        if (firstCapacity) this.capacities.set(secondRoomId, firstCapacity);
+
+        firstRoom.populationCapacity = secondCapacity
+            ? { ...secondCapacity }
+            : undefined;
+        secondRoom.populationCapacity = firstCapacity
+            ? { ...firstCapacity }
+            : undefined;
+
+        for (const denizenId of firstRoom.denizenIds) {
+            const denizen = this.denizens.get(denizenId);
+            if (denizen) denizen.assignedRoomId = firstRoomId;
+        }
+        for (const denizenId of secondRoom.denizenIds) {
+            const denizen = this.denizens.get(denizenId);
+            if (denizen) denizen.assignedRoomId = secondRoomId;
+        }
+
+        this.emitRoom(firstRoomId);
+        this.emitRoom(secondRoomId);
+        this.emitRoster();
+        return true;
+    }
+
+    emitRoomSnapshot(roomId: EntityId): void {
+        this.emitRoom(roomId);
+    }
+
     addDenizen(denizen: DenizenData): boolean {
         if (
             this.denizens.has(denizen.id) ||

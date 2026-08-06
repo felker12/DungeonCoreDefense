@@ -10,6 +10,7 @@ import { RoomView } from "./RoomView";
 export class DungeonMapView extends GameObjects.Container {
     private readonly roomViews = new Map<string, RoomView>();
     private readonly corridorViews = new Map<string, CorridorView>();
+    private selectedRoomId: string | null = null;
 
     constructor(
         scene: Scene,
@@ -61,7 +62,22 @@ export class DungeonMapView extends GameObjects.Container {
         this.remove(view, true);
     }
 
+    refreshRoom(roomId: string): void {
+        const room = this.dungeon.rooms.find((candidate) => candidate.id === roomId);
+        const previousView = this.roomViews.get(roomId);
+        if (!room || !previousView) return;
+
+        this.roomViews.delete(roomId);
+        this.remove(previousView, true);
+
+        const replacement = new RoomView(this.scene, room);
+        replacement.setSelected(this.selectedRoomId === roomId);
+        this.roomViews.set(roomId, replacement);
+        this.add(replacement);
+    }
+
     selectRoom(roomId: string): void {
+        this.selectedRoomId = roomId;
         for (const [id, view] of this.roomViews) {
             view.setSelected(id === roomId);
         }

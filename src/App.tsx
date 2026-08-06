@@ -194,19 +194,17 @@ function App() {
             snapshot: DungeonConstructionSnapshot | null,
         ): void => {
             setConstruction((current) => {
-                const roomId =
-                    snapshot?.selectedRoomId ?? current?.selectedRoomId;
+                const roomId = snapshot?.selectedRoomId ?? current?.selectedRoomId;
                 return roomId
-                    ? (dungeonSceneRef.current?.getRoomConstructionSnapshot(
+                    ? dungeonSceneRef.current?.getRoomConstructionSnapshot(
                           roomId,
-                      ) ?? null)
+                      ) ?? null
                     : null;
             });
             setSelectedRoom((current) =>
                 current
-                    ? (dungeonSceneRef.current?.getRoomDetails(
-                          current.room.id,
-                      ) ?? current)
+                    ? dungeonSceneRef.current?.getRoomDetails(current.room.id) ??
+                      current
                     : current,
             );
             setDenizenRooms(
@@ -257,19 +255,34 @@ function App() {
     ): boolean =>
         Boolean(
             selectedRoom &&
-            !waveActive &&
-            getScene()?.buildRoom(selectedRoom.room.id, roomType, direction),
+                !waveActive &&
+                getScene()?.buildRoom(
+                    selectedRoom.room.id,
+                    roomType,
+                    direction,
+                ),
         );
 
     const addConnection = (roomId: string): boolean =>
         Boolean(
             selectedRoom &&
-            !waveActive &&
-            getScene()?.addConnectionBetweenRooms(selectedRoom.room.id, roomId),
+                !waveActive &&
+                getScene()?.addConnectionBetweenRooms(
+                    selectedRoom.room.id,
+                    roomId,
+                ),
         );
 
     const removeConnection = (connectionId: string): boolean =>
-        !waveActive && (getScene()?.removeConnection(connectionId) ?? false);
+        !waveActive &&
+        (getScene()?.removeConnection(connectionId) ?? false);
+
+    const moveCore = (): boolean =>
+        Boolean(
+            selectedRoom &&
+                !waveActive &&
+                getScene()?.moveCoreToRoom(selectedRoom.room.id),
+        );
 
     const completedWaves = wave.completedWaves;
     const expansion = progression.nextExpansion;
@@ -402,9 +415,9 @@ function App() {
                                         ? "Loading Dungeon…"
                                         : waveFailed
                                           ? `Retry Wave ${wave.waveNumber}`
-                                          : wave.waveNumber === 0
-                                            ? "Start First Wave"
-                                            : "Start Next Wave"}
+                                        : wave.waveNumber === 0
+                                          ? "Start First Wave"
+                                          : "Start Next Wave"}
                                 </span>
                                 <b className="text-lg leading-none">→</b>
                             </button>
@@ -495,6 +508,7 @@ function App() {
                                     onBuildRoom={buildRoom}
                                     onAddConnection={addConnection}
                                     onRemoveConnection={removeConnection}
+                                    onMoveCore={moveCore}
                                     onClose={() => setSelectedRoom(null)}
                                 />
                             ) : (

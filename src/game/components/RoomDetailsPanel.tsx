@@ -36,6 +36,7 @@ interface RoomDetailsPanelProps {
     ) => boolean;
     onAddConnection: (roomId: EntityId) => boolean;
     onRemoveConnection: (connectionId: EntityId) => boolean;
+    onMoveCore: () => boolean;
     onClose: () => void;
 }
 
@@ -51,6 +52,7 @@ export function RoomDetailsPanel({
     onBuildRoom,
     onAddConnection,
     onRemoveConnection,
+    onMoveCore,
     onClose,
 }: RoomDetailsPanelProps) {
     const { room, population } = details;
@@ -67,19 +69,19 @@ export function RoomDetailsPanel({
     );
     const defenderSlotsOpen = Boolean(
         population &&
-        capacity &&
-        population.assignedDefenders < capacity.defenders,
+            capacity &&
+            population.assignedDefenders < capacity.defenders,
     );
     const producerSlotsOpen = Boolean(
         population &&
-        capacity?.kind === "resource" &&
-        population.assignedGatherers < capacity.gatherers,
+            capacity?.kind === "resource" &&
+            population.assignedGatherers < capacity.gatherers,
     );
     const gathererUpgradeCost = getRoomSlotUpgradeCost("gatherer");
     const defenderUpgradeCost = getRoomSlotUpgradeCost("defender");
     const gathererSlotsMaxed = Boolean(
         capacity?.kind === "resource" &&
-        capacity.gatherers >= capacity.maxGatherers,
+            capacity.gatherers >= capacity.maxGatherers,
     );
     const defenderSlotsMaxed = Boolean(
         !capacity || capacity.defenders >= capacity.maxDefenders,
@@ -126,6 +128,7 @@ export function RoomDetailsPanel({
                     onBuildRoom={onBuildRoom}
                     onAddConnection={onAddConnection}
                     onRemoveConnection={onRemoveConnection}
+                    onMoveCore={onMoveCore}
                 />
             )}
 
@@ -287,6 +290,7 @@ function RoomConstructionPanel({
     onBuildRoom,
     onAddConnection,
     onRemoveConnection,
+    onMoveCore,
 }: {
     construction: DungeonConstructionSnapshot;
     resources: ResourceSnapshot["resources"];
@@ -297,9 +301,41 @@ function RoomConstructionPanel({
     ) => boolean;
     onAddConnection: (roomId: EntityId) => boolean;
     onRemoveConnection: (connectionId: EntityId) => boolean;
+    onMoveCore: () => boolean;
 }) {
     return (
         <div className="mt-5 grid gap-4 border-y border-white/8 py-4">
+            <div className="rounded-xl border border-[#a979c6]/20 bg-[#a979c6]/7 p-3">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 className="m-0 text-[10px] font-extrabold tracking-[.12em] text-[#d2afe1] uppercase">
+                            Core relocation
+                        </h3>
+                        <p className="mt-1.5 mb-0 text-[9px] leading-relaxed text-[#97889e]">
+                            Swap this room with the Dungeon Core while preserving
+                            both locations, all corridors, and this room&apos;s upgrades.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        disabled={!construction.coreRelocation.available}
+                        title={
+                            construction.coreRelocation.reason ??
+                            "Move the Dungeon Core to this room."
+                        }
+                        onClick={onMoveCore}
+                        className="shrink-0 cursor-pointer rounded-md border border-[#a979c6]/35 bg-[#a979c6]/12 px-2.5 py-1.5 text-[8px] font-extrabold text-[#d8b5e7] uppercase hover:bg-[#a979c6]/22 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                        Move Core Here
+                    </button>
+                </div>
+                {construction.coreRelocation.reason && (
+                    <p className="mt-2 mb-0 text-[9px] leading-relaxed text-[#776c7c]">
+                        {construction.coreRelocation.reason}
+                    </p>
+                )}
+            </div>
+
             <div>
                 <div className="flex items-center justify-between gap-3">
                     <h3 className="m-0 text-[10px] font-extrabold tracking-[.12em] text-[#d8cfdc] uppercase">
@@ -312,24 +348,22 @@ function RoomConstructionPanel({
                                 : "border-[#d9b766]/20 bg-[#d9b766]/8 text-[#e4c87f]"
                         }`}
                     >
-                        Rooms {construction.functionalRoomCount} /{" "}
-                        {construction.roomLimit}
+                        Rooms {construction.functionalRoomCount} / {construction.roomLimit}
                     </span>
                 </div>
 
                 {construction.atOrAboveLimit ? (
                     <p className="mt-2 mb-0 rounded-lg border border-[#bd615b]/18 bg-[#bd615b]/6 p-2.5 text-[10px] leading-relaxed text-[#c99490]">
-                        This dungeon is at or above its Level room limit.
-                        Existing custom rooms remain valid; raise the Dungeon
-                        Level before constructing more.
+                        This dungeon is at or above its Level room limit. Existing
+                        custom rooms remain valid; raise the Dungeon Level before
+                        constructing more.
                     </p>
                 ) : (
                     <div className="mt-3 grid gap-3">
                         {construction.catalog.map((option) => {
                             const affordable = option.costs.every(
                                 (cost) =>
-                                    resources[cost.resource].value >=
-                                    cost.amount,
+                                    resources[cost.resource].value >= cost.amount,
                             );
 
                             return (
@@ -370,8 +404,8 @@ function RoomConstructionPanel({
                                                 title={
                                                     !affordable
                                                         ? "Gather the required construction resources."
-                                                        : (direction.reason ??
-                                                          `Build to the ${direction.direction}.`)
+                                                        : direction.reason ??
+                                                          `Build to the ${direction.direction}.`
                                                 }
                                                 onClick={() =>
                                                     onBuildRoom(
@@ -381,9 +415,7 @@ function RoomConstructionPanel({
                                                 }
                                                 className="cursor-pointer rounded-md border border-[#a979c6]/25 bg-[#a979c6]/9 px-1 py-2 text-[8px] font-extrabold text-[#cda8df] uppercase hover:bg-[#a979c6]/18 disabled:cursor-not-allowed disabled:opacity-30"
                                             >
-                                                {direction.direction
-                                                    .slice(0, 1)
-                                                    .toUpperCase()}
+                                                {direction.direction.slice(0, 1).toUpperCase()}
                                             </button>
                                         ))}
                                     </div>
@@ -523,9 +555,7 @@ function AssignmentGroup({
                                 onClick={() => onAssign(denizen.id)}
                                 className="shrink-0 cursor-pointer rounded-lg border border-[#a979c6]/30 bg-[#a979c6]/10 px-3 py-2 text-[9px] font-extrabold text-[#cda8df] uppercase transition hover:border-[#c99be1]/45 hover:bg-[#a979c6]/18 disabled:cursor-not-allowed disabled:opacity-35"
                             >
-                                {!canAfford
-                                    ? "Need resources"
-                                    : `Add · ${cost.amount}`}
+                                {!canAfford ? "Need resources" : `Add · ${cost.amount}`}
                             </button>
                         </div>
                     ))}

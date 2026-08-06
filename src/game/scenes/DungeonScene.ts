@@ -12,6 +12,11 @@ import {
     DungeonCoreManager,
     type DungeonCoreSnapshot,
 } from "../core/DungeonCoreManager";
+import {
+    createCoreRelocationCandidate,
+    swapCoreRoomRoles,
+    validateCoreRelocationTarget,
+} from "../core/DungeonCoreRelocation";
 import { initialDungeon } from "../data/initialDungeon";
 import {
     CARDINAL_DIRECTIONS,
@@ -110,6 +115,12 @@ export interface AdjacentRoomOption {
     direction: CardinalDirection;
 }
 
+export interface CoreRelocationOption {
+    currentCoreRoomId: EntityId;
+    available: boolean;
+    reason: string | null;
+}
+
 export interface DungeonConstructionSnapshot {
     selectedRoomId: EntityId;
     functionalRoomCount: number;
@@ -120,6 +131,7 @@ export interface DungeonConstructionSnapshot {
     catalog: readonly RoomBuildCatalogOption[];
     connections: readonly RoomConnectionOption[];
     adjacentRooms: readonly AdjacentRoomOption[];
+    coreRelocation: CoreRelocationOption;
 }
 
 export class DungeonScene extends Scene {
@@ -484,6 +496,7 @@ export class DungeonScene extends Scene {
         );
         if (!selectedRoom) return null;
 
+        const waveStatus = this.waveManager?.getStatus();
         const locked = this.waveManager?.isActive() ?? false;
         const functionalRoomCount = getFunctionalRoomCount(this.dungeon);
         const roomLimit = getRoomLimit(this.dungeonLevel);
@@ -594,6 +607,20 @@ export class DungeonScene extends Scene {
             ];
         });
 
+        const currentCoreRoomId =
+            this.dungeon.rooms.find((room) => room.type === "core")?.id ?? "";
+        const relocation = validateCoreRelocationTarget(this.dungeon, roomId);
+        const relocationLocked = locked || waveStatus?.state === "failed";
+        const coreRelocation: CoreRelocationOption = {
+            currentCoreRoomId,
+            available: relocation.valid && !relocationLocked,
+            reason: locked
+                ? "The Core cannot move during an active raid."
+                : waveStatus?.state === "failed"
+                  ? "Retry or resolve the failed wave before moving the Core."
+                  : relocation.reason,
+        };
+
         return {
             selectedRoomId: roomId,
             functionalRoomCount,
@@ -604,7 +631,57 @@ export class DungeonScene extends Scene {
             catalog,
             connections,
             adjacentRooms,
+            coreRelocation,
         };
+    }
+
+    moveCoreToRoom(targetRoomId: EntityId): boolean {
+        const waves = this.waveManager;
+        const population = this.roomPopulation;
+        if (!waves || !population || waves.isActive()) return false;
+        if (waves.getStatus().state === "failed") return false;
+
+        const validation = validateCoreRelocationTarget(
+            this.dungeon,
+            targetRoomId,
+        );
+        if (!validation.valid) return false;
+
+        const candidate = createCoreRelocationCandidate(
+            this.dungeon,
+            targetRoomId,
+        );
+        if (!candidate) return false;
+        try {
+            validateDungeonMap(candidate);
+        } catch {
+            return false;
+        }
+
+        const result = swapCoreRoomRoles(this.dungeon, targetRoomId);
+        if (!result) return false;
+        if (
+            !population.swapRoomPopulation(
+                result.previousCoreRoomId,
+                result.coreRoomId,
+            )
+        ) {
+            swapCoreRoomRoles(this.dungeon, result.previousCoreRoomId);
+            return false;
+        }
+
+        this.mapView?.refreshRoom(result.previousCoreRoomId);
+        this.mapView?.refreshRoom(result.coreRoomId);
+        population.emitRoomSnapshot(result.previousCoreRoomId);
+        population.emitRoomSnapshot(result.coreRoomId);
+        this.mapView?.selectRoom(result.coreRoomId);
+        this.refreshTopology(result.coreRoomId);
+
+        const coreRoom = this.dungeon.rooms.find(
+            (room) => room.id === result.coreRoomId,
+        );
+        if (coreRoom) EventBus.emit("room-selected", coreRoom);
+        return true;
     }
 
     buildRoom(
@@ -669,17 +746,9 @@ export class DungeonScene extends Scene {
             return false;
         }
 
-        const first = this.dungeon.rooms.find(
-            (room) => room.id === firstRoomId,
-        );
-        const second = this.dungeon.rooms.find(
-            (room) => room.id === secondRoomId,
-        );
-        if (
-            !first ||
-            !second ||
-            !areRoomsConnectable(this.dungeon, first, second)
-        ) {
+        const first = this.dungeon.rooms.find((room) => room.id === firstRoomId);
+        const second = this.dungeon.rooms.find((room) => room.id === secondRoomId);
+        if (!first || !second || !areRoomsConnectable(this.dungeon, first, second)) {
             return false;
         }
 
@@ -726,10 +795,7 @@ export class DungeonScene extends Scene {
         );
         if (connectionIndex < 0) return false;
 
-        const [connection] = this.dungeon.connections.splice(
-            connectionIndex,
-            1,
-        );
+        const [connection] = this.dungeon.connections.splice(connectionIndex, 1);
         this.mapView?.removeConnection(connection.id);
         this.refreshTopology();
         return true;
@@ -828,9 +894,7 @@ export class DungeonScene extends Scene {
         roomId: EntityId,
         direction: CardinalDirection,
     ): boolean {
-        const room = this.dungeon.rooms.find(
-            (candidate) => candidate.id === roomId,
-        );
+        const room = this.dungeon.rooms.find((candidate) => candidate.id === roomId);
         if (!room) return false;
 
         return this.dungeon.connections.some((connection) => {
