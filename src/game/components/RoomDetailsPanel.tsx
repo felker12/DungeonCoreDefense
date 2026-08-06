@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type { EntityId } from "../components/DungeonData";
 import { DenizenRole } from "../components/entityComponents/entityData";
 import type { DenizenData } from "../components/entityComponents/entityData";
@@ -12,6 +11,7 @@ import type {
     DenizenRosterSnapshot,
     ResourceSlotType,
 } from "../rooms/RoomPopulationManager";
+import { getRoomSlotUpgradeCost } from "../rooms/RoomSlotUpgrade";
 import type { RoomDetails } from "../scenes/DungeonScene";
 
 interface RoomDetailsPanelProps {
@@ -49,13 +49,22 @@ export function RoomDetailsPanel({
     );
     const defenderSlotsOpen = Boolean(
         population &&
-        capacity &&
-        population.assignedDefenders < capacity.defenders,
+            capacity &&
+            population.assignedDefenders < capacity.defenders,
     );
     const producerSlotsOpen = Boolean(
         population &&
+            capacity?.kind === "resource" &&
+            population.assignedGatherers < capacity.gatherers,
+    );
+    const gathererUpgradeCost = getRoomSlotUpgradeCost("gatherer");
+    const defenderUpgradeCost = getRoomSlotUpgradeCost("defender");
+    const gathererSlotsMaxed = Boolean(
         capacity?.kind === "resource" &&
-        population.assignedGatherers < capacity.gatherers,
+            capacity.gatherers >= capacity.maxGatherers,
+    );
+    const defenderSlotsMaxed = Boolean(
+        !capacity || capacity.defenders >= capacity.maxDefenders,
     );
 
     return (
@@ -125,23 +134,46 @@ export function RoomDetailsPanel({
                     <div className="mt-2 grid grid-cols-2 gap-2">
                         {capacity?.kind === "resource" && (
                             <UpgradeButton
+                                label="Gatherer slot"
+                                cost={gathererUpgradeCost.amount}
+                                resource={getResourceLabel(
+                                    gathererUpgradeCost.resource,
+                                )}
+                                canAfford={
+                                    resources[gathererUpgradeCost.resource]
+                                        .value >= gathererUpgradeCost.amount
+                                }
+                                locked={assignmentLocked}
+                                maxed={gathererSlotsMaxed}
                                 disabled={
-                                    capacity.gatherers >= capacity.maxGatherers
+                                    assignmentLocked ||
+                                    gathererSlotsMaxed ||
+                                    resources[gathererUpgradeCost.resource]
+                                        .value < gathererUpgradeCost.amount
                                 }
                                 onClick={() => onUpgrade("gatherer")}
-                            >
-                                + Gatherer slot
-                            </UpgradeButton>
+                            />
                         )}
                         <UpgradeButton
+                            label="Defender slot"
+                            cost={defenderUpgradeCost.amount}
+                            resource={getResourceLabel(
+                                defenderUpgradeCost.resource,
+                            )}
+                            canAfford={
+                                resources[defenderUpgradeCost.resource].value >=
+                                defenderUpgradeCost.amount
+                            }
+                            locked={assignmentLocked}
+                            maxed={defenderSlotsMaxed}
                             disabled={
-                                !capacity ||
-                                capacity.defenders >= capacity.maxDefenders
+                                assignmentLocked ||
+                                defenderSlotsMaxed ||
+                                resources[defenderUpgradeCost.resource].value <
+                                    defenderUpgradeCost.amount
                             }
                             onClick={() => onUpgrade("defender")}
-                        >
-                            + Defender slot
-                        </UpgradeButton>
+                        />
                     </div>
                     <h3 className="mt-5.5 mb-2 flex items-center gap-2 text-[11px] tracking-[.06em] text-[#d8cfdc] uppercase">
                         <span className="text-[#bd9350]">♟</span> Denizens
@@ -287,9 +319,7 @@ function AssignmentGroup({
                                 onClick={() => onAssign(denizen.id)}
                                 className="shrink-0 cursor-pointer rounded-lg border border-[#a979c6]/30 bg-[#a979c6]/10 px-3 py-2 text-[9px] font-extrabold text-[#cda8df] uppercase transition hover:border-[#c99be1]/45 hover:bg-[#a979c6]/18 disabled:cursor-not-allowed disabled:opacity-35"
                             >
-                                {!canAfford
-                                    ? "Need resources"
-                                    : `Add · ${cost.amount}`}
+                                {!canAfford ? "Need resources" : `Add · ${cost.amount}`}
                             </button>
                         </div>
                     ))}
@@ -319,22 +349,45 @@ function Stat({
 }
 
 function UpgradeButton({
+    label,
+    cost,
+    resource,
+    canAfford,
+    locked,
+    maxed,
     disabled,
     onClick,
-    children,
 }: {
+    label: string;
+    cost: number;
+    resource: string;
+    canAfford: boolean;
+    locked: boolean;
+    maxed: boolean;
     disabled: boolean;
     onClick: () => void;
-    children: ReactNode;
 }) {
+    const text = maxed
+        ? `${label} maxed`
+        : !canAfford
+          ? `Need ${cost} ${resource}`
+          : `+ ${label} · ${cost} ${resource}`;
+
     return (
         <button
             type="button"
             disabled={disabled}
             onClick={onClick}
+            title={
+                maxed
+                    ? `${label} capacity is already at its maximum.`
+                    : locked
+                      ? "Room upgrades are locked during raids."
+                      : `${label} costs ${cost} ${resource}.`
+            }
             className="cursor-pointer rounded-lg border border-[#b076d7]/25 bg-[#8f52b5]/10 px-2 py-2 text-[10px] font-bold text-[#d6b7ed] hover:border-[#d097ee]/40 hover:bg-[#8f52b5]/20 disabled:cursor-not-allowed disabled:opacity-35"
         >
-            {children}
+            {text}
         </button>
     );
 }

@@ -17,6 +17,7 @@ import type {
     RoomPopulationSnapshot,
     ResourceSlotType,
 } from "../rooms/RoomPopulationManager";
+import { getRoomSlotUpgradeCost } from "../rooms/RoomSlotUpgrade";
 import {
     ResourceManager,
     type ResourceCost,
@@ -88,11 +89,43 @@ export class DungeonScene extends Scene {
         roomId: EntityId,
         slot: ResourceSlotType | "defender",
     ): boolean {
-        const population = this.roomPopulation?.getSnapshot(roomId);
-        if (!population) return false;
-        return population.capacity.kind === "combat"
-            ? (this.roomPopulation?.upgradeCombatSlot(roomId) ?? false)
-            : (this.roomPopulation?.upgradeResourceSlot(roomId, slot) ?? false);
+        if (this.waveManager?.isActive()) return false;
+
+        const populationManager = this.roomPopulation;
+        const resources = this.resourceManager;
+        const population = populationManager?.getSnapshot(roomId);
+        if (!populationManager || !resources || !population) return false;
+
+        const upgradeSlot: ResourceSlotType =
+            population.capacity.kind === "combat" ? "defender" : slot;
+
+        if (
+            upgradeSlot === "gatherer" &&
+            (population.capacity.kind !== "resource" ||
+                population.capacity.gatherers >=
+                    population.capacity.maxGatherers)
+        ) {
+            return false;
+        }
+
+        if (
+            upgradeSlot === "defender" &&
+            population.capacity.defenders >= population.capacity.maxDefenders
+        ) {
+            return false;
+        }
+
+        const cost = getRoomSlotUpgradeCost(upgradeSlot);
+        if (!resources.canAfford(cost.resource, cost.amount)) return false;
+
+        const upgraded =
+            population.capacity.kind === "combat"
+                ? populationManager.upgradeCombatSlot(roomId)
+                : populationManager.upgradeResourceSlot(roomId, upgradeSlot);
+
+        // The checks and mutation are synchronous, so spending after a successful
+        // upgrade guarantees a rejected upgrade never charges the player.
+        return upgraded && resources.spend(cost.resource, cost.amount);
     }
 
     create(): void {
