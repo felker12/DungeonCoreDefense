@@ -24,9 +24,9 @@ export interface ResourceManagerState extends ResourceSnapshot {
 }
 
 const STARTING_RESOURCES: ResourceSnapshot["resources"] = {
-    essence: { id: "essence", value: 148, capacity: 250 },
-    stone: { id: "stone", value: 72, capacity: 150 },
-    supplies: { id: "supplies", value: 34, capacity: 100 },
+    essence: { id: "essence", value: 100, capacity: 250 },
+    stone: { id: "stone", value: 80, capacity: 150 },
+    supplies: { id: "supplies", value: 75, capacity: 100 },
 };
 
 // Each point of room production is divided among the current prototype
@@ -111,6 +111,23 @@ export class ResourceManager {
                 cost.amount >= 0 &&
                 this.canAfford(cost.resource, cost.amount),
         );
+    }
+
+    gain(id: DungeonResourceId, amount: number): number {
+        if (!Number.isFinite(amount) || amount <= 0) return 0;
+
+        const resource = this.resources[id];
+        const availableCapacity = Math.max(
+            0,
+            resource.capacity - resource.value,
+        );
+        const gained = Math.min(Math.floor(amount), availableCapacity);
+        if (gained <= 0) return 0;
+
+        resource.value += gained;
+        this.totalEarned[id] += gained;
+        this.emitSnapshot();
+        return gained;
     }
 
     spend(id: DungeonResourceId, amount: number): boolean {
@@ -205,3 +222,4 @@ function normalizeNonNegativeNumber(value: unknown, fallback: number): number {
         ? value
         : fallback;
 }
+

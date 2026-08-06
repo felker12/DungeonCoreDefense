@@ -260,6 +260,7 @@ export class CombatManager {
             if (target.health === 0) {
                 owner?.presentation.defeatAdventurer(target.id);
                 EventBus.emit("adventurer-defeated", {
+                    adventurer: { ...target },
                     adventurerId: target.id,
                     partyId: target.partyId,
                     roomId: battle.room.id,

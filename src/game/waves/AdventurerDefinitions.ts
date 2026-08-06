@@ -2,6 +2,7 @@ import {
     AdventurerClass,
     type AdventurerData,
 } from "../components/entityComponents/entityData";
+import type { DungeonResourceId } from "../resources/ResourceManager";
 
 export interface AdventurerArchetype {
     label: string;
@@ -121,4 +122,66 @@ export function getAdventurerClassLabel(
     adventurerClass: AdventurerData["class"],
 ): string {
     return ADVENTURER_ARCHETYPES[adventurerClass].label;
+}
+
+
+export interface AdventurerResourceDrop {
+    resource: DungeonResourceId;
+    amount: number;
+}
+
+const ADVENTURER_DROP_WEIGHTS: Record<
+    AdventurerClass,
+    readonly [DungeonResourceId, number][]
+> = {
+    [AdventurerClass.WARRIOR]: [
+        ["stone", 0.6],
+        ["supplies", 0.25],
+        ["essence", 0.15],
+    ],
+    [AdventurerClass.ROGUE]: [
+        ["supplies", 0.6],
+        ["stone", 0.25],
+        ["essence", 0.15],
+    ],
+    [AdventurerClass.CLERIC]: [
+        ["essence", 0.6],
+        ["supplies", 0.25],
+        ["stone", 0.15],
+    ],
+    [AdventurerClass.ARCANIST]: [
+        ["essence", 0.7],
+        ["stone", 0.15],
+        ["supplies", 0.15],
+    ],
+};
+
+/**
+ * Returns the small resource bundle recovered when an adventurer is defeated.
+ * Combat provides a progression floor, while resource rooms remain the reliable
+ * source of sustained income.
+ */
+export function getAdventurerResourceDrop(
+    adventurer: Pick<AdventurerData, "class" | "level">,
+    random: () => number = Math.random,
+): AdventurerResourceDrop {
+    const weightedDrops = ADVENTURER_DROP_WEIGHTS[adventurer.class];
+    const roll = Math.max(0, Math.min(0.999999, random()));
+    let cumulativeWeight = 0;
+
+    for (const [resource, weight] of weightedDrops) {
+        cumulativeWeight += weight;
+        if (roll < cumulativeWeight) {
+            return {
+                resource,
+                amount: 2 + Math.max(1, Math.floor(adventurer.level)),
+            };
+        }
+    }
+
+    // Floating-point fallback; the configured weights should total 1.
+    return {
+        resource: weightedDrops[weightedDrops.length - 1][0],
+        amount: 2 + Math.max(1, Math.floor(adventurer.level)),
+    };
 }

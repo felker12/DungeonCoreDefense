@@ -5,6 +5,7 @@ import { CombatManager } from "../combat/CombatManager";
 import type { RoomAttackersSnapshot } from "../combat/CombatTypes";
 import {
     DenizenRole,
+    type AdventurerData,
     type DenizenType,
 } from "../components/entityComponents/entityData";
 import type { DungeonRoom } from "../components/mapComponents/DungeonRoom";
@@ -63,6 +64,7 @@ import {
 import { DungeonMapView } from "../views/DungeonMapView";
 import type { AdventurerParty } from "../waves/PartyData";
 import { WaveManager, type WaveStatus } from "../waves/WaveManager";
+import { getAdventurerResourceDrop } from "../waves/AdventurerDefinitions";
 
 const EXPANSION_CAPACITY_REWARD = 2;
 const BASE_CORE_HEALTH = 300;
@@ -510,6 +512,15 @@ export class DungeonScene extends Scene {
             );
             if (result?.breached) this.waveManager?.failCurrentWave();
         };
+        const handleAdventurerDefeated = (payload: {
+            adventurer: AdventurerData;
+        }): void => {
+            const resources = this.resourceManager;
+            if (!resources) return;
+
+            const drop = getAdventurerResourceDrop(payload.adventurer);
+            resources.gain(drop.resource, drop.amount);
+        };
         const handleWaveStatus = (status: WaveStatus): void => {
             if (status.state === "completed") {
                 this.combatManager?.cancelAll();
@@ -524,6 +535,7 @@ export class DungeonScene extends Scene {
 
         EventBus.on("room-selected", handleRoomSelected);
         EventBus.on("party-core-reached", handlePartyCoreReached);
+        EventBus.on("adventurer-defeated", handleAdventurerDefeated);
         EventBus.on("wave-status-changed", handleWaveStatus);
         this.events.once("shutdown", () => {
             if (this.initialCenterFrame !== undefined) {
@@ -533,6 +545,7 @@ export class DungeonScene extends Scene {
 
             EventBus.off("room-selected", handleRoomSelected);
             EventBus.off("party-core-reached", handlePartyCoreReached);
+            EventBus.off("adventurer-defeated", handleAdventurerDefeated);
             EventBus.off("wave-status-changed", handleWaveStatus);
             this.waveManager?.destroy();
             this.waveManager = undefined;
