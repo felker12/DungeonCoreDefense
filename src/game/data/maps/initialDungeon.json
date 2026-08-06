@@ -1,42 +1,264 @@
 {
-  "id": "dungeon-001",
-  "name": "The First Delve",
-  "rooms": [
-    { "id": "room-entrance", "name": "Dungeon Entrance", "type": "entrance", "position": { "x": 100, "y": 400 }, "size": { "width": 150, "height": 110 }, "level": 1, "capacity": 0, "denizenIds": [], "allowedConnectionSides": ["east"] },
-    { "id": "room-west-guard", "name": "Western Guard Room", "type": "guard", "position": { "x": 350, "y": 400 }, "size": { "width": 170, "height": 130 }, "level": 1, "capacity": 2, "denizenIds": [] },
-    { "id": "room-abandoned-cell", "name": "Abandoned Cell", "type": "guard", "position": { "x": 350, "y": 150 }, "size": { "width": 150, "height": 120 }, "level": 1, "capacity": 1, "denizenIds": [], "deadEnd": true },
-    { "id": "room-central-guard", "name": "Central Guard Room", "type": "guard", "position": { "x": 600, "y": 400 }, "size": { "width": 170, "height": 130 }, "level": 1, "capacity": 2, "denizenIds": [] },
-    { "id": "room-core-approach", "name": "Core Approach", "type": "guard", "position": { "x": 1200, "y": 400 }, "size": { "width": 170, "height": 130 }, "level": 1, "capacity": 3, "denizenIds": [] },
-    { "id": "room-northern-grotto", "name": "Northern Grotto", "type": "production", "position": { "x": 600, "y": 150 }, "size": { "width": 180, "height": 140 }, "level": 1, "capacity": 1, "denizenIds": [] },
-    { "id": "room-upper-barracks", "name": "Upper Barracks", "type": "guard", "position": { "x": 900, "y": 150 }, "size": { "width": 170, "height": 130 }, "level": 1, "capacity": 2, "denizenIds": [] },
-    { "id": "room-upper-workshop", "name": "Upper Workshop", "type": "production", "position": { "x": 1200, "y": 150 }, "size": { "width": 180, "height": 140 }, "level": 1, "capacity": 1, "denizenIds": [] },
-    { "id": "room-collapsed-shrine", "name": "Collapsed Shrine", "type": "production", "position": { "x": 1200, "y": -100 }, "size": { "width": 180, "height": 140 }, "level": 1, "capacity": 1, "denizenIds": [], "deadEnd": true },
-    { "id": "room-core-watch", "name": "Core Watch", "type": "guard", "position": { "x": 1500, "y": 150 }, "size": { "width": 170, "height": 130 }, "level": 1, "capacity": 3, "denizenIds": [] },
-    { "id": "room-lower-barracks", "name": "Lower Barracks", "type": "guard", "position": { "x": 600, "y": 650 }, "size": { "width": 170, "height": 130 }, "level": 1, "capacity": 3, "denizenIds": [] },
-    { "id": "room-fungal-grotto", "name": "Fungal Grotto", "type": "production", "position": { "x": 900, "y": 650 }, "size": { "width": 180, "height": 140 }, "level": 1, "capacity": 1, "denizenIds": [] },
-    { "id": "room-flooded-vault", "name": "Flooded Vault", "type": "production", "position": { "x": 900, "y": 900 }, "size": { "width": 180, "height": 140 }, "level": 1, "capacity": 1, "denizenIds": [], "deadEnd": true },
-    { "id": "room-mana-well", "name": "Mana Well", "type": "production", "position": { "x": 1200, "y": 650 }, "size": { "width": 180, "height": 140 }, "level": 1, "capacity": 1, "denizenIds": [] },
-    { "id": "room-lower-watch", "name": "Lower Core Watch", "type": "guard", "position": { "x": 1500, "y": 650 }, "size": { "width": 170, "height": 130 }, "level": 1, "capacity": 3, "denizenIds": [] },
-    { "id": "room-core", "name": "Dungeon Core", "type": "core", "position": { "x": 1500, "y": 400 }, "size": { "width": 180, "height": 140 }, "level": 1, "capacity": 1, "denizenIds": [], "terminal": true, "allowedConnectionSides": ["north", "south", "west"] }
-  ],
-  "connections": [
-    { "id": "connection-entrance-west", "fromRoomId": "room-entrance", "toRoomId": "room-west-guard" },
-    { "id": "connection-west-central", "fromRoomId": "room-west-guard", "toRoomId": "room-central-guard" },
-    { "id": "connection-west-abandoned", "fromRoomId": "room-west-guard", "toRoomId": "room-abandoned-cell" },
-    { "id": "connection-central-approach", "fromRoomId": "room-central-guard", "toRoomId": "room-core-approach" },
-    { "id": "connection-central-north", "fromRoomId": "room-central-guard", "toRoomId": "room-northern-grotto" },
-    { "id": "connection-northern-upper", "fromRoomId": "room-northern-grotto", "toRoomId": "room-upper-barracks" },
-    { "id": "connection-upper-workshop", "fromRoomId": "room-upper-barracks", "toRoomId": "room-upper-workshop" },
-    { "id": "connection-workshop-shrine", "fromRoomId": "room-upper-workshop", "toRoomId": "room-collapsed-shrine" },
-    { "id": "connection-workshop-watch", "fromRoomId": "room-upper-workshop", "toRoomId": "room-core-watch" },
-    { "id": "connection-central-lower", "fromRoomId": "room-central-guard", "toRoomId": "room-lower-barracks" },
-    { "id": "connection-lower-fungal", "fromRoomId": "room-lower-barracks", "toRoomId": "room-fungal-grotto" },
-    { "id": "connection-fungal-vault", "fromRoomId": "room-fungal-grotto", "toRoomId": "room-flooded-vault" },
-    { "id": "connection-fungal-mana", "fromRoomId": "room-fungal-grotto", "toRoomId": "room-mana-well" },
-    { "id": "connection-mana-watch", "fromRoomId": "room-mana-well", "toRoomId": "room-lower-watch" },
-    { "id": "connection-upper-lower", "fromRoomId": "room-upper-barracks", "toRoomId": "room-fungal-grotto" },
-    { "id": "connection-approach-core", "fromRoomId": "room-core-approach", "toRoomId": "room-core" },
-    { "id": "connection-upper-core", "fromRoomId": "room-core-watch", "toRoomId": "room-core" },
-    { "id": "connection-lower-core", "fromRoomId": "room-lower-watch", "toRoomId": "room-core" }
-  ]
+    "id": "dungeon-001",
+    "name": "The First Delve",
+    "rooms": [
+        {
+            "id": "room-entrance",
+            "name": "Dungeon Entrance",
+            "type": "entrance",
+            "position": { "x": 100, "y": 400 },
+            "size": { "width": 150, "height": 110 },
+            "level": 1,
+            "capacity": 0,
+            "denizenIds": [],
+            "allowedConnectionSides": ["east"]
+        },
+        {
+            "id": "room-west-guard",
+            "name": "Western Guard Room",
+            "type": "guard",
+            "position": { "x": 350, "y": 400 },
+            "size": { "width": 170, "height": 130 },
+            "level": 1,
+            "capacity": 2,
+            "denizenIds": []
+        },
+        {
+            "id": "room-abandoned-cell",
+            "name": "Abandoned Cell",
+            "type": "guard",
+            "position": { "x": 350, "y": 150 },
+            "size": { "width": 150, "height": 120 },
+            "level": 1,
+            "capacity": 1,
+            "denizenIds": [],
+            "deadEnd": true
+        },
+        {
+            "id": "room-central-guard",
+            "name": "Central Guard Room",
+            "type": "guard",
+            "position": { "x": 600, "y": 400 },
+            "size": { "width": 170, "height": 130 },
+            "level": 1,
+            "capacity": 2,
+            "denizenIds": []
+        },
+        {
+            "id": "room-core-approach",
+            "name": "Core Approach",
+            "type": "guard",
+            "position": { "x": 1200, "y": 400 },
+            "size": { "width": 170, "height": 130 },
+            "level": 1,
+            "capacity": 3,
+            "denizenIds": []
+        },
+        {
+            "id": "room-northern-grotto",
+            "name": "Northern Grotto",
+            "type": "production",
+            "position": { "x": 600, "y": 150 },
+            "size": { "width": 180, "height": 140 },
+            "level": 1,
+            "capacity": 1,
+            "denizenIds": []
+        },
+        {
+            "id": "room-upper-barracks",
+            "name": "Upper Barracks",
+            "type": "guard",
+            "position": { "x": 900, "y": 150 },
+            "size": { "width": 170, "height": 130 },
+            "level": 1,
+            "capacity": 2,
+            "denizenIds": []
+        },
+        {
+            "id": "room-upper-workshop",
+            "name": "Upper Workshop",
+            "type": "production",
+            "position": { "x": 1200, "y": 150 },
+            "size": { "width": 180, "height": 140 },
+            "level": 1,
+            "capacity": 1,
+            "denizenIds": []
+        },
+        {
+            "id": "room-collapsed-shrine",
+            "name": "Collapsed Shrine",
+            "type": "production",
+            "position": { "x": 1200, "y": -100 },
+            "size": { "width": 180, "height": 140 },
+            "level": 1,
+            "capacity": 1,
+            "denizenIds": [],
+            "deadEnd": true
+        },
+        {
+            "id": "room-core-watch",
+            "name": "Core Watch",
+            "type": "guard",
+            "position": { "x": 1500, "y": 150 },
+            "size": { "width": 170, "height": 130 },
+            "level": 1,
+            "capacity": 3,
+            "denizenIds": []
+        },
+        {
+            "id": "room-lower-barracks",
+            "name": "Lower Barracks",
+            "type": "guard",
+            "position": { "x": 600, "y": 650 },
+            "size": { "width": 170, "height": 130 },
+            "level": 1,
+            "capacity": 3,
+            "denizenIds": []
+        },
+        {
+            "id": "room-fungal-grotto",
+            "name": "Fungal Grotto",
+            "type": "production",
+            "position": { "x": 900, "y": 650 },
+            "size": { "width": 180, "height": 140 },
+            "level": 1,
+            "capacity": 1,
+            "denizenIds": []
+        },
+        {
+            "id": "room-flooded-vault",
+            "name": "Flooded Vault",
+            "type": "production",
+            "position": { "x": 900, "y": 900 },
+            "size": { "width": 180, "height": 140 },
+            "level": 1,
+            "capacity": 1,
+            "denizenIds": [],
+            "deadEnd": true
+        },
+        {
+            "id": "room-mana-well",
+            "name": "Mana Well",
+            "type": "production",
+            "position": { "x": 1200, "y": 650 },
+            "size": { "width": 180, "height": 140 },
+            "level": 1,
+            "capacity": 1,
+            "denizenIds": []
+        },
+        {
+            "id": "room-lower-watch",
+            "name": "Lower Core Watch",
+            "type": "guard",
+            "position": { "x": 1500, "y": 650 },
+            "size": { "width": 170, "height": 130 },
+            "level": 1,
+            "capacity": 3,
+            "denizenIds": []
+        },
+        {
+            "id": "room-core",
+            "name": "Dungeon Core",
+            "type": "core",
+            "position": { "x": 1500, "y": 400 },
+            "size": { "width": 180, "height": 140 },
+            "level": 1,
+            "capacity": 1,
+            "denizenIds": [],
+            "terminal": true
+        }
+    ],
+    "connections": [
+        {
+            "id": "connection-entrance-west",
+            "fromRoomId": "room-entrance",
+            "toRoomId": "room-west-guard"
+        },
+        {
+            "id": "connection-west-central",
+            "fromRoomId": "room-west-guard",
+            "toRoomId": "room-central-guard"
+        },
+        {
+            "id": "connection-west-abandoned",
+            "fromRoomId": "room-west-guard",
+            "toRoomId": "room-abandoned-cell"
+        },
+        {
+            "id": "connection-central-approach",
+            "fromRoomId": "room-central-guard",
+            "toRoomId": "room-core-approach"
+        },
+        {
+            "id": "connection-central-north",
+            "fromRoomId": "room-central-guard",
+            "toRoomId": "room-northern-grotto"
+        },
+        {
+            "id": "connection-northern-upper",
+            "fromRoomId": "room-northern-grotto",
+            "toRoomId": "room-upper-barracks"
+        },
+        {
+            "id": "connection-upper-workshop",
+            "fromRoomId": "room-upper-barracks",
+            "toRoomId": "room-upper-workshop"
+        },
+        {
+            "id": "connection-workshop-shrine",
+            "fromRoomId": "room-upper-workshop",
+            "toRoomId": "room-collapsed-shrine"
+        },
+        {
+            "id": "connection-workshop-watch",
+            "fromRoomId": "room-upper-workshop",
+            "toRoomId": "room-core-watch"
+        },
+        {
+            "id": "connection-central-lower",
+            "fromRoomId": "room-central-guard",
+            "toRoomId": "room-lower-barracks"
+        },
+        {
+            "id": "connection-lower-fungal",
+            "fromRoomId": "room-lower-barracks",
+            "toRoomId": "room-fungal-grotto"
+        },
+        {
+            "id": "connection-fungal-vault",
+            "fromRoomId": "room-fungal-grotto",
+            "toRoomId": "room-flooded-vault"
+        },
+        {
+            "id": "connection-fungal-mana",
+            "fromRoomId": "room-fungal-grotto",
+            "toRoomId": "room-mana-well"
+        },
+        {
+            "id": "connection-mana-watch",
+            "fromRoomId": "room-mana-well",
+            "toRoomId": "room-lower-watch"
+        },
+        {
+            "id": "connection-upper-lower",
+            "fromRoomId": "room-upper-barracks",
+            "toRoomId": "room-fungal-grotto"
+        },
+        {
+            "id": "connection-approach-core",
+            "fromRoomId": "room-core-approach",
+            "toRoomId": "room-core"
+        },
+        {
+            "id": "connection-upper-core",
+            "fromRoomId": "room-core-watch",
+            "toRoomId": "room-core"
+        },
+        {
+            "id": "connection-lower-core",
+            "fromRoomId": "room-lower-watch",
+            "toRoomId": "room-core"
+        }
+    ]
 }
+
