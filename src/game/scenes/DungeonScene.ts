@@ -1,5 +1,3 @@
-// src/game/scenes/DungeonScene.ts
-
 import { Scene } from "phaser";
 import { DungeonCameraController } from "../camera/DungeonCameraController";
 import type { EntityId } from "../components/DungeonData";
@@ -25,6 +23,13 @@ import { WaveManager } from "../waves/WaveManager";
 export interface RoomDetails {
     room: DungeonRoom;
     population: RoomPopulationSnapshot | null;
+}
+
+export interface DefenderRoomOption {
+    id: EntityId;
+    name: string;
+    assigned: number;
+    capacity: number;
 }
 
 export class DungeonScene extends Scene {
@@ -157,6 +162,34 @@ export class DungeonScene extends Scene {
         );
     }
 
+    getDefenderRoomOptions(): DefenderRoomOption[] {
+        if (!this.roomPopulation) return [];
+
+        return initialDungeon.rooms.flatMap((room) => {
+            const population = this.roomPopulation?.getSnapshot(room.id);
+            if (!population) return [];
+
+            return [
+                {
+                    id: room.id,
+                    name: room.name,
+                    assigned: population.assignedDefenders,
+                    capacity: population.capacity.defenders,
+                },
+            ];
+        });
+    }
+
+    assignDefenderToRoom(denizenId: EntityId, roomId: EntityId): boolean {
+        if (this.waveManager?.isActive()) return false;
+        return this.roomPopulation?.assignDenizen(denizenId, roomId) ?? false;
+    }
+
+    unassignDefender(denizenId: EntityId): boolean {
+        if (this.waveManager?.isActive()) return false;
+        return this.roomPopulation?.unassignDenizen(denizenId) ?? false;
+    }
+
     recruitDefender(type: DenizenType): boolean {
         const population = this.roomPopulation;
         const resources = this.resourceManager;
@@ -191,3 +224,4 @@ export class DungeonScene extends Scene {
         return true;
     }
 }
+

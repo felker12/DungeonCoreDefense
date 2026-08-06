@@ -11,7 +11,11 @@ import type {
     RoomPopulationSnapshot,
     ResourceSlotType,
 } from "./game/rooms/RoomPopulationManager";
-import { DungeonScene, type RoomDetails } from "./game/scenes/DungeonScene";
+import {
+    DungeonScene,
+    type DefenderRoomOption,
+    type RoomDetails,
+} from "./game/scenes/DungeonScene";
 import type { WaveStatus } from "./game/waves/WaveManager";
 import type { ResourceSnapshot } from "./game/resources/ResourceManager";
 import { StatsPanel } from "./game/components/StatsPanel";
@@ -54,6 +58,9 @@ function App() {
     const [wave, setWave] = useState(INITIAL_STATUS);
     const [resourceState, setResourceState] = useState(INITIAL_RESOURCES);
     const [denizenRoster, setDenizenRoster] = useState(INITIAL_ROSTER);
+    const [defenderRooms, setDefenderRooms] = useState<
+        readonly DefenderRoomOption[]
+    >([]);
     const [sceneReady, setSceneReady] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<RoomDetails | null>(null);
     const [panelOpen, setPanelOpen] = useState(true);
@@ -70,8 +77,12 @@ function App() {
     }, []);
 
     useEffect(() => {
-        const handleRoster = (snapshot: DenizenRosterSnapshot): void =>
+        const handleRoster = (snapshot: DenizenRosterSnapshot): void => {
             setDenizenRoster(snapshot);
+            setDefenderRooms(
+                dungeonSceneRef.current?.getDefenderRoomOptions() ?? [],
+            );
+        };
 
         EventBus.on("denizen-roster-changed", handleRoster);
 
@@ -101,6 +112,9 @@ function App() {
             setActiveTab("room");
         };
         const handlePopulation = (snapshot: RoomPopulationSnapshot): void => {
+            setDefenderRooms(
+                dungeonSceneRef.current?.getDefenderRoomOptions() ?? [],
+            );
             setSelectedRoom((current) => {
                 if (!current || current.room.id !== snapshot.roomId)
                     return current;
@@ -124,6 +138,7 @@ function App() {
 
         dungeonSceneRef.current = scene;
         setDenizenRoster(scene.getDenizenRoster());
+        setDefenderRooms(scene.getDefenderRoomOptions());
         setSceneReady(true);
     }, []);
     const getScene = (): DungeonScene | null => dungeonSceneRef.current;
@@ -135,6 +150,13 @@ function App() {
 
     const recruitDefender = (type: DenizenType): boolean =>
         getScene()?.recruitDefender(type) ?? false;
+
+    const assignDefender = (denizenId: string, roomId: string): boolean =>
+        !waveActive &&
+        (getScene()?.assignDefenderToRoom(denizenId, roomId) ?? false);
+
+    const unassignDefender = (denizenId: string): boolean =>
+        !waveActive && (getScene()?.unassignDefender(denizenId) ?? false);
 
     return (
         <main className="game-shell-react">
@@ -330,15 +352,28 @@ function App() {
                             ) : activeTab === "denizens" ? (
                                 <DenizenPanel
                                     roster={denizenRoster}
+                                    rooms={defenderRooms}
                                     supplies={
                                         resourceState.resources.supplies.value
                                     }
+                                    assignmentLocked={waveActive}
                                     onRecruit={recruitDefender}
+                                    onAssign={assignDefender}
+                                    onUnassign={unassignDefender}
                                 />
                             ) : selectedRoom ? (
                                 <RoomDetailsPanel
                                     details={selectedRoom}
+                                    roster={denizenRoster}
+                                    assignmentLocked={waveActive}
                                     onUpgrade={upgradeRoom}
+                                    onAssign={(denizenId) =>
+                                        assignDefender(
+                                            denizenId,
+                                            selectedRoom.room.id,
+                                        )
+                                    }
+                                    onUnassign={unassignDefender}
                                     onClose={() => setSelectedRoom(null)}
                                 />
                             ) : (

@@ -1,21 +1,44 @@
 import type { ReactNode } from "react";
+import type { EntityId } from "../components/DungeonData";
+import { DenizenRole } from "../components/entityComponents/entityData";
 import { getRoomTypeLabel } from "../components/mapComponents/DungeonRoom";
-import type { ResourceSlotType } from "../rooms/RoomPopulationManager";
+import type {
+    DenizenRosterSnapshot,
+    ResourceSlotType,
+} from "../rooms/RoomPopulationManager";
 import type { RoomDetails } from "../scenes/DungeonScene";
 
 interface RoomDetailsPanelProps {
     details: RoomDetails;
+    roster: DenizenRosterSnapshot;
+    assignmentLocked: boolean;
     onUpgrade: (slot: ResourceSlotType | "defender") => void;
+    onAssign: (denizenId: EntityId) => boolean;
+    onUnassign: (denizenId: EntityId) => boolean;
     onClose: () => void;
 }
 
 export function RoomDetailsPanel({
     details,
+    roster,
+    assignmentLocked,
     onUpgrade,
+    onAssign,
+    onUnassign,
     onClose,
 }: RoomDetailsPanelProps) {
     const { room, population } = details;
     const capacity = population?.capacity;
+    const unassignedDefenders = roster.denizens.filter(
+        (denizen) =>
+            denizen.role === DenizenRole.DEFENDER &&
+            denizen.assignedRoomId === null,
+    );
+    const defenderSlotsOpen = Boolean(
+        population &&
+        capacity &&
+        population.assignedDefenders < capacity.defenders,
+    );
 
     return (
         <section>
@@ -110,21 +133,86 @@ export function RoomDetailsPanel({
                             No denizens assigned.
                         </p>
                     ) : (
-                        population.denizens.map((denizen) => (
-                            <button
-                                key={denizen.id}
-                                type="button"
-                                className="mt-2 flex w-full cursor-pointer items-center justify-between rounded-lg border border-white/8 bg-white/3 px-3 py-2.5 text-left text-[11px] text-[#d8d0da] capitalize hover:border-[#ddb966]/20 hover:bg-white/5"
-                            >
-                                <span>
-                                    {denizen.type} · {denizen.role}
-                                </span>
-                                <small className="text-[9px] text-[#796f7e]">
-                                    {denizen.status}
-                                </small>
-                            </button>
-                        ))
+                        <div className="grid gap-2">
+                            {population.denizens.map((denizen) => (
+                                <div
+                                    key={denizen.id}
+                                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/8 bg-white/3 px-3 py-2.5 text-left text-[11px] text-[#d8d0da]"
+                                >
+                                    <span>
+                                        {denizen.type} · {denizen.role}
+                                    </span>
+                                    <span className="flex items-center gap-2">
+                                        <small className="text-[9px] text-[#796f7e]">
+                                            {denizen.status}
+                                        </small>
+                                        <button
+                                            type="button"
+                                            disabled={assignmentLocked}
+                                            onClick={() =>
+                                                onUnassign(denizen.id)
+                                            }
+                                            className="cursor-pointer rounded-md border border-white/10 bg-white/4 px-2 py-1 text-[8px] font-extrabold tracking-[.06em] text-[#aaa0ae] uppercase transition hover:border-[#bd615b]/30 hover:bg-[#bd615b]/10 hover:text-[#d98a84] disabled:cursor-not-allowed disabled:opacity-35"
+                                        >
+                                            Remove
+                                        </button>
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
                     )}
+
+                    <div className="mt-4 border-t border-white/8 pt-4">
+                        <div className="mb-2.5 flex items-center justify-between gap-3">
+                            <h3 className="m-0 text-[9px] font-extrabold tracking-[.14em] text-[#8f8592] uppercase">
+                                Add a defender
+                            </h3>
+                            {assignmentLocked && (
+                                <span className="text-[9px] font-bold text-[#c47d76]">
+                                    Locked during raids
+                                </span>
+                            )}
+                        </div>
+
+                        {!defenderSlotsOpen ? (
+                            <p className="m-0 rounded-[10px] border border-white/7 bg-white/3 p-3 text-center text-[10px] text-[#8f8597]">
+                                All defender slots in this room are filled.
+                            </p>
+                        ) : unassignedDefenders.length === 0 ? (
+                            <p className="m-0 rounded-[10px] border border-white/7 bg-white/3 p-3 text-center text-[10px] leading-relaxed text-[#8f8597]">
+                                No unassigned defenders. Recruit one from the
+                                Denizens tab first.
+                            </p>
+                        ) : (
+                            <div className="grid gap-2">
+                                {unassignedDefenders.map((denizen) => (
+                                    <div
+                                        key={denizen.id}
+                                        className="flex items-center justify-between gap-3 rounded-lg border border-[#a979c6]/16 bg-[#a979c6]/6 px-3 py-2.5"
+                                    >
+                                        <div className="min-w-0">
+                                            <strong className="block truncate text-[11px] text-[#ddd3df] capitalize">
+                                                {denizen.type}
+                                            </strong>
+                                            <span className="text-[9px] text-[#8f8597]">
+                                                HP {denizen.health} · ATK{" "}
+                                                {denizen.attack} · DEF{" "}
+                                                {denizen.defense}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={assignmentLocked}
+                                            onClick={() => onAssign(denizen.id)}
+                                            className="shrink-0 cursor-pointer rounded-lg border border-[#a979c6]/30 bg-[#a979c6]/10 px-3 py-2 text-[9px] font-extrabold text-[#cda8df] uppercase transition hover:border-[#c99be1]/45 hover:bg-[#a979c6]/18 disabled:cursor-not-allowed disabled:opacity-35"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </>
             )}
         </section>
@@ -170,4 +258,3 @@ function UpgradeButton({
         </button>
     );
 }
-

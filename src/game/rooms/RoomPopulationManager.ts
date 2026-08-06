@@ -81,12 +81,15 @@ export class RoomPopulationManager {
         return true;
     }
 
-    assignDenizen(denizen: DenizenData, roomId: EntityId): boolean {
+    assignDenizen(denizenId: EntityId, roomId: EntityId): boolean {
+        const denizen = this.denizens.get(denizenId);
         const room = this.dungeon.rooms.find(
             (candidate) => candidate.id === roomId,
         );
         const capacity = this.capacities.get(roomId);
-        if (!room || !capacity) return false;
+        if (!denizen || denizen.assignedRoomId || !room || !capacity) {
+            return false;
+        }
 
         const snapshot = this.getSnapshot(roomId);
         if (!snapshot) return false;
@@ -103,10 +106,11 @@ export class RoomPopulationManager {
         }
 
         denizen.assignedRoomId = roomId;
-        this.denizens.set(denizen.id, denizen);
-        if (!room.denizenIds.includes(denizen.id))
-            room.denizenIds.push(denizen.id);
+        if (!room.denizenIds.includes(denizenId)) {
+            room.denizenIds.push(denizenId);
+        }
         this.emitRoom(roomId);
+        this.emitRoster();
         return true;
     }
 
@@ -122,6 +126,7 @@ export class RoomPopulationManager {
         if (room)
             room.denizenIds = room.denizenIds.filter((id) => id !== denizenId);
         this.emitRoom(roomId);
+        this.emitRoster();
         return true;
     }
 
