@@ -87,7 +87,12 @@ const INITIAL_PROGRESSION: DungeonProgressionSnapshot = {
             { resource: "essence", amount: 50 },
         ],
         denizenCapacityReward: 2,
-        roomCapacityReward: 2,
+        coreHealthReward: 75,
+        resourceCapacityRewards: {
+            essence: 75,
+            stone: 50,
+            supplies: 25,
+        },
     },
 };
 
@@ -454,7 +459,9 @@ function App() {
                             required: cost.amount,
                         })),
                         denizenCapacityReward: expansion.denizenCapacityReward,
-                        roomCapacityReward: expansion.roomCapacityReward,
+                        coreHealthReward: expansion.coreHealthReward,
+                        resourceCapacityRewards:
+                            expansion.resourceCapacityRewards,
                     }}
                     expansionLocked={waveActive}
                     onExpandDungeon={() => getScene()?.expandDungeon()}

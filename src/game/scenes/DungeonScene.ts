@@ -33,8 +33,6 @@ import {
     getConnectionDirection,
     getConstructionDefinition,
     getFunctionalRoomCount,
-    getRoomLimit,
-    getRoomLimitIncrease,
     validateRoomConstruction,
     type BuildableRoomType,
 } from "../construction/DungeonConstruction";
@@ -67,6 +65,13 @@ import type { AdventurerParty } from "../waves/PartyData";
 import { WaveManager, type WaveStatus } from "../waves/WaveManager";
 
 const EXPANSION_CAPACITY_REWARD = 2;
+const BASE_CORE_HEALTH = 300;
+const CORE_HEALTH_PER_LEVEL = 75;
+const RESOURCE_CAPACITY_PER_LEVEL = {
+    essence: 75,
+    stone: 50,
+    supplies: 25,
+} as const;
 
 export interface RoomDetails {
     room: DungeonRoom;
@@ -89,7 +94,12 @@ export interface DungeonExpansionRequirement {
     waveRequired: number;
     costs: readonly ResourceCost[];
     denizenCapacityReward: number;
-    roomCapacityReward: number;
+    coreHealthReward: number;
+    resourceCapacityRewards: {
+        essence: number;
+        stone: number;
+        supplies: number;
+    };
 }
 
 export interface DungeonProgressionSnapshot {
@@ -135,9 +145,6 @@ export interface CoreRelocationOption {
 export interface DungeonConstructionSnapshot {
     selectedRoomId: EntityId;
     functionalRoomCount: number;
-    roomLimit: number;
-    roomLimitIncrease: number;
-    atOrAboveLimit: boolean;
     locked: boolean;
     catalog: readonly RoomBuildCatalogOption[];
     connections: readonly RoomConnectionOption[];
@@ -224,7 +231,9 @@ export class DungeonScene extends Scene {
         return (
             this.coreManager?.getSnapshot() ?? {
                 health: 300,
-                maxHealth: 300,
+                maxHealth:
+                BASE_CORE_HEALTH +
+                (this.dungeonLevel - 1) * CORE_HEALTH_PER_LEVEL,
                 defense: 5,
                 state: "stable",
                 raidStartHealth: null,
@@ -473,7 +482,7 @@ export class DungeonScene extends Scene {
         this.combatManager = new CombatManager(this, this.roomPopulation);
         this.waveManager = new WaveManager(this, this.dungeon, {
             seed: 1337,
-            partySpawnInterval: 5000,
+            partySpawnInterval: 1400,
             minPartySize: 1,
             startingMaxPartySize: 3,
             maxPartySize: 10,
@@ -677,8 +686,6 @@ export class DungeonScene extends Scene {
         const waveStatus = this.waveManager?.getStatus();
         const locked = this.waveManager?.isActive() ?? false;
         const functionalRoomCount = getFunctionalRoomCount(this.dungeon);
-        const roomLimit = getRoomLimit(this.dungeonLevel);
-        const atOrAboveLimit = functionalRoomCount >= roomLimit;
 
         const catalog = ROOM_CONSTRUCTION_CATALOG.map((definition) => ({
             type: definition.type,
@@ -802,9 +809,6 @@ export class DungeonScene extends Scene {
         return {
             selectedRoomId: roomId,
             functionalRoomCount,
-            roomLimit,
-            roomLimitIncrease: getRoomLimitIncrease(),
-            atOrAboveLimit,
             locked,
             catalog,
             connections,
@@ -926,17 +930,9 @@ export class DungeonScene extends Scene {
             return false;
         }
 
-        const first = this.dungeon.rooms.find(
-            (room) => room.id === firstRoomId,
-        );
-        const second = this.dungeon.rooms.find(
-            (room) => room.id === secondRoomId,
-        );
-        if (
-            !first ||
-            !second ||
-            !areRoomsConnectable(this.dungeon, first, second)
-        ) {
+        const first = this.dungeon.rooms.find((room) => room.id === firstRoomId);
+        const second = this.dungeon.rooms.find((room) => room.id === secondRoomId);
+        if (!first || !second || !areRoomsConnectable(this.dungeon, first, second)) {
             return false;
         }
 
@@ -984,10 +980,7 @@ export class DungeonScene extends Scene {
         );
         if (connectionIndex < 0) return false;
 
-        const [connection] = this.dungeon.connections.splice(
-            connectionIndex,
-            1,
-        );
+        const [connection] = this.dungeon.connections.splice(connectionIndex, 1);
         this.mapView?.removeConnection(connection.id);
         this.refreshTopology();
         this.autosave();
@@ -1026,6 +1019,20 @@ export class DungeonScene extends Scene {
             return false;
         }
 
+        this.coreManager?.increaseMaxHealth(requirement.coreHealthReward);
+        resources.increaseCapacity(
+            "essence",
+            requirement.resourceCapacityRewards.essence,
+        );
+        resources.increaseCapacity(
+            "stone",
+            requirement.resourceCapacityRewards.stone,
+        );
+        resources.increaseCapacity(
+            "supplies",
+            requirement.resourceCapacityRewards.supplies,
+        );
+
         this.dungeonLevel += 1;
         this.emitProgression();
         EventBus.emit("dungeon-construction-changed", null);
@@ -1040,7 +1047,7 @@ export class DungeonScene extends Scene {
 
         return {
             level: this.dungeonLevel + 1,
-            waveRequired: this.dungeonLevel * 2,
+            waveRequired: this.dungeonLevel * 3,
             costs: [
                 {
                     resource: "stone",
@@ -1058,7 +1065,8 @@ export class DungeonScene extends Scene {
                 },
             ],
             denizenCapacityReward: EXPANSION_CAPACITY_REWARD,
-            roomCapacityReward: 1,
+            coreHealthReward: CORE_HEALTH_PER_LEVEL,
+            resourceCapacityRewards: { ...RESOURCE_CAPACITY_PER_LEVEL },
         };
     }
 
@@ -1088,9 +1096,7 @@ export class DungeonScene extends Scene {
         roomId: EntityId,
         direction: CardinalDirection,
     ): boolean {
-        const room = this.dungeon.rooms.find(
-            (candidate) => candidate.id === roomId,
-        );
+        const room = this.dungeon.rooms.find((candidate) => candidate.id === roomId);
         if (!room) return false;
 
         return this.dungeon.connections.some((connection) => {
@@ -1143,10 +1149,7 @@ export class DungeonScene extends Scene {
     private restoreIdCounters(save: DungeonSaveData): void {
         this.nextRoomId = Math.max(
             save.counters.nextRoomId,
-            getNextNumericId(
-                this.dungeon.rooms.map((room) => room.id),
-                /^player-room-(\d+)$/,
-            ),
+            getNextNumericId(this.dungeon.rooms.map((room) => room.id), /^player-room-(\d+)$/),
         );
         this.nextConnectionId = Math.max(
             save.counters.nextConnectionId,
@@ -1200,4 +1203,3 @@ function getNextNumericId(ids: readonly EntityId[], pattern: RegExp): number {
     }
     return highest + 1;
 }
-

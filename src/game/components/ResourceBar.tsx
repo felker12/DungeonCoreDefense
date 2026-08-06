@@ -16,7 +16,12 @@ interface NextDungeonLevel {
     waveDefeated: boolean;
     costs: { resource: string; current: number; required: number }[];
     denizenCapacityReward: number;
-    roomCapacityReward: number;
+    coreHealthReward: number;
+    resourceCapacityRewards: {
+        essence: number;
+        stone: number;
+        supplies: number;
+    };
 }
 
 interface ResourceBarProps {
@@ -121,11 +126,14 @@ export function ResourceBar({
                                         </div>
                                     ))}
                                 </div>
-                                <p className="level-reward">
-                                    Reward: +{nextLevel.denizenCapacityReward}{" "}
-                                    denizen capacity · +
-                                    {nextLevel.roomCapacityReward} room capacity
-                                </p>
+                                <div className="level-reward grid gap-1">
+                                    <strong className="mb-1 text-[#d6ccd8]">Level rewards</strong>
+                                    <span>+{nextLevel.coreHealthReward} Core health</span>
+                                    <span>+{nextLevel.resourceCapacityRewards.essence} Essence capacity</span>
+                                    <span>+{nextLevel.resourceCapacityRewards.stone} Stone capacity</span>
+                                    <span>+{nextLevel.resourceCapacityRewards.supplies} Supplies capacity</span>
+                                    <span>+{nextLevel.denizenCapacityReward} denizen capacity</span>
+                                </div>
                                 <button
                                     type="button"
                                     className="expand-dungeon-button"

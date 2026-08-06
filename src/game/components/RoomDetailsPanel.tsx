@@ -371,25 +371,12 @@ function RoomConstructionPanel({
                     <h3 className="m-0 text-[10px] font-extrabold tracking-[.12em] text-[#d8cfdc] uppercase">
                         Dungeon construction
                     </h3>
-                    <span
-                        className={`rounded border px-2 py-1 text-[9px] font-bold ${
-                            construction.atOrAboveLimit
-                                ? "border-[#bd615b]/25 bg-[#bd615b]/8 text-[#d98a84]"
-                                : "border-[#d9b766]/20 bg-[#d9b766]/8 text-[#e4c87f]"
-                        }`}
-                    >
-                        Rooms {construction.functionalRoomCount} / {construction.roomLimit}
+                    <span className="rounded border border-[#d9b766]/20 bg-[#d9b766]/8 px-2 py-1 text-[9px] font-bold text-[#e4c87f]">
+                        {construction.functionalRoomCount} functional rooms
                     </span>
                 </div>
 
-                {construction.atOrAboveLimit ? (
-                    <p className="mt-2 mb-0 rounded-lg border border-[#bd615b]/18 bg-[#bd615b]/6 p-2.5 text-[10px] leading-relaxed text-[#c99490]">
-                        This dungeon is at or above its Level room limit. Existing
-                        custom rooms remain valid; raise the Dungeon Level before
-                        constructing more.
-                    </p>
-                ) : (
-                    <div className="mt-3 grid gap-3">
+                <div className="mt-3 grid gap-3">
                         {construction.catalog.map((option) => {
                             const affordable = option.costs.every(
                                 (cost) =>
@@ -453,7 +440,6 @@ function RoomConstructionPanel({
                             );
                         })}
                     </div>
-                )}
             </div>
 
             <div>

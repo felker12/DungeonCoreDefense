@@ -49,7 +49,7 @@ const DEFAULT_MINIMUM_RETRY_HEALTH_PERCENT = 0.5;
 const UPDATE_EMIT_INTERVAL_MS = 250;
 
 export class DungeonCoreManager {
-    private readonly maxHealth: number;
+    private maxHealth: number;
     private readonly defense: number;
     private readonly regenerationPerSecond: number;
     private readonly regenerationCapPercent: number;
@@ -212,6 +212,15 @@ export class DungeonCoreManager {
         }
     }
 
+    increaseMaxHealth(amount: number): boolean {
+        if (!Number.isFinite(amount) || amount <= 0) return false;
+
+        this.maxHealth += amount;
+        this.health = Math.min(this.maxHealth, this.health + amount);
+        this.emitSnapshot();
+        return true;
+    }
+
     getSnapshot(): DungeonCoreSnapshot {
         return {
             health: this.health,
@@ -255,11 +264,7 @@ export class DungeonCoreManager {
         this.state = "stable";
         this.raidStartHealth = null;
         this.retryHealth = null;
-        this.lastDamage = clampNumber(
-            saved.lastDamage,
-            0,
-            Number.MAX_SAFE_INTEGER,
-        );
+        this.lastDamage = clampNumber(saved.lastDamage, 0, Number.MAX_SAFE_INTEGER);
         this.lastAttackerCount = Math.floor(
             clampNumber(saved.lastAttackerCount, 0, Number.MAX_SAFE_INTEGER),
         );

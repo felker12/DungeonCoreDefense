@@ -138,6 +138,14 @@ export class ResourceManager {
         return true;
     }
 
+    increaseCapacity(id: DungeonResourceId, amount: number): boolean {
+        if (!Number.isFinite(amount) || amount <= 0) return false;
+
+        this.resources[id].capacity += amount;
+        this.emitSnapshot();
+        return true;
+    }
+
     getSnapshot(): ResourceSnapshot {
         return {
             resources: {

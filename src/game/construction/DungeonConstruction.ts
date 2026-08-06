@@ -64,13 +64,7 @@ export const ROOM_CONSTRUCTION_CATALOG: readonly RoomConstructionDefinition[] =
         },
     ];
 
-const BASE_FUNCTIONAL_ROOM_LIMIT = 5;
-const ROOM_LIMIT_PER_DUNGEON_LEVEL = 2;
-export const ROOM_GRID_SPACING = {
-    horizontal: 300,
-    vertical: 250,
-} as const;
-
+const CORRIDOR_GAP = 90;
 const MINIMUM_ROOM_GAP = 30;
 const MAXIMUM_ADJACENT_EDGE_GAP = 420;
 
@@ -103,18 +97,6 @@ export function getFunctionalRoomCount(dungeon: DungeonMap): number {
     ).length;
 }
 
-export function getRoomLimit(dungeonLevel: number): number {
-    const normalizedLevel = Math.max(1, Math.floor(dungeonLevel));
-    return (
-        BASE_FUNCTIONAL_ROOM_LIMIT +
-        (normalizedLevel - 1) * ROOM_LIMIT_PER_DUNGEON_LEVEL
-    );
-}
-
-export function getRoomLimitIncrease(): number {
-    return ROOM_LIMIT_PER_DUNGEON_LEVEL;
-}
-
 export function getConstructionDefinition(
     roomType: BuildableRoomType,
 ): RoomConstructionDefinition {
@@ -136,7 +118,11 @@ export function createRoomCandidate(
     if (!source) return null;
 
     const definition = getConstructionDefinition(request.roomType);
-    const position = getConnectedRoomPosition(source, request.direction);
+    const position = getConnectedRoomPosition(
+        source,
+        definition.size,
+        request.direction,
+    );
     const sameTypeCount = dungeon.rooms.filter(
         (room) => room.type === request.roomType,
     ).length;
@@ -167,7 +153,7 @@ export function createRoomConnection(
 
 export function validateRoomConstruction(
     dungeon: DungeonMap,
-    dungeonLevel: number,
+    _dungeonLevel: number,
     request: BuildRoomRequest,
     candidate: DungeonRoom,
 ): ConstructionValidation {
@@ -176,9 +162,6 @@ export function validateRoomConstruction(
     );
     if (!source) return invalid("The selected room no longer exists.");
 
-    if (getFunctionalRoomCount(dungeon) >= getRoomLimit(dungeonLevel)) {
-        return invalid("The dungeon room limit has been reached.");
-    }
 
     if (
         source.allowedConnectionSides &&
@@ -344,27 +327,33 @@ export function canRemoveConnection(
 
 function getConnectedRoomPosition(
     source: DungeonRoom,
+    targetSize: Size,
     direction: CardinalDirection,
 ): Position {
+    const horizontalDistance =
+        source.size.width / 2 + targetSize.width / 2 + CORRIDOR_GAP;
+    const verticalDistance =
+        source.size.height / 2 + targetSize.height / 2 + CORRIDOR_GAP;
+
     switch (direction) {
         case "north":
             return {
                 x: source.position.x,
-                y: source.position.y - ROOM_GRID_SPACING.vertical,
+                y: source.position.y - verticalDistance,
             };
         case "east":
             return {
-                x: source.position.x + ROOM_GRID_SPACING.horizontal,
+                x: source.position.x + horizontalDistance,
                 y: source.position.y,
             };
         case "south":
             return {
                 x: source.position.x,
-                y: source.position.y + ROOM_GRID_SPACING.vertical,
+                y: source.position.y + verticalDistance,
             };
         case "west":
             return {
-                x: source.position.x - ROOM_GRID_SPACING.horizontal,
+                x: source.position.x - horizontalDistance,
                 y: source.position.y,
             };
     }
