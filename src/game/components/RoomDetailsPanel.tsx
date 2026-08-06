@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 import type { EntityId } from "../components/DungeonData";
 import { DenizenRole } from "../components/entityComponents/entityData";
+import type { DenizenData } from "../components/entityComponents/entityData";
 import { getRoomTypeLabel } from "../components/mapComponents/DungeonRoom";
+import {
+    getDenizenAssignmentCost,
+    getResourceLabel,
+} from "../denizens/DenizenAssignment";
+import type { ResourceSnapshot } from "../resources/ResourceManager";
 import type {
     DenizenRosterSnapshot,
     ResourceSlotType,
@@ -11,6 +17,7 @@ import type { RoomDetails } from "../scenes/DungeonScene";
 interface RoomDetailsPanelProps {
     details: RoomDetails;
     roster: DenizenRosterSnapshot;
+    resources: ResourceSnapshot["resources"];
     assignmentLocked: boolean;
     onUpgrade: (slot: ResourceSlotType | "defender") => void;
     onAssign: (denizenId: EntityId) => boolean;
@@ -21,6 +28,7 @@ interface RoomDetailsPanelProps {
 export function RoomDetailsPanel({
     details,
     roster,
+    resources,
     assignmentLocked,
     onUpgrade,
     onAssign,
@@ -34,10 +42,20 @@ export function RoomDetailsPanel({
             denizen.role === DenizenRole.DEFENDER &&
             denizen.assignedRoomId === null,
     );
+    const unassignedProducers = roster.denizens.filter(
+        (denizen) =>
+            denizen.role === DenizenRole.GATHERER &&
+            denizen.assignedRoomId === null,
+    );
     const defenderSlotsOpen = Boolean(
         population &&
         capacity &&
         population.assignedDefenders < capacity.defenders,
+    );
+    const producerSlotsOpen = Boolean(
+        population &&
+        capacity?.kind === "resource" &&
+        population.assignedGatherers < capacity.gatherers,
     );
 
     return (
@@ -162,60 +180,122 @@ export function RoomDetailsPanel({
                         </div>
                     )}
 
-                    <div className="mt-4 border-t border-white/8 pt-4">
-                        <div className="mb-2.5 flex items-center justify-between gap-3">
-                            <h3 className="m-0 text-[9px] font-extrabold tracking-[.14em] text-[#8f8592] uppercase">
-                                Add a defender
-                            </h3>
-                            {assignmentLocked && (
-                                <span className="text-[9px] font-bold text-[#c47d76]">
-                                    Locked during raids
-                                </span>
-                            )}
-                        </div>
-
-                        {!defenderSlotsOpen ? (
-                            <p className="m-0 rounded-[10px] border border-white/7 bg-white/3 p-3 text-center text-[10px] text-[#8f8597]">
-                                All defender slots in this room are filled.
-                            </p>
-                        ) : unassignedDefenders.length === 0 ? (
-                            <p className="m-0 rounded-[10px] border border-white/7 bg-white/3 p-3 text-center text-[10px] leading-relaxed text-[#8f8597]">
-                                No unassigned defenders. Recruit one from the
-                                Denizens tab first.
-                            </p>
-                        ) : (
-                            <div className="grid gap-2">
-                                {unassignedDefenders.map((denizen) => (
-                                    <div
-                                        key={denizen.id}
-                                        className="flex items-center justify-between gap-3 rounded-lg border border-[#a979c6]/16 bg-[#a979c6]/6 px-3 py-2.5"
-                                    >
-                                        <div className="min-w-0">
-                                            <strong className="block truncate text-[11px] text-[#ddd3df] capitalize">
-                                                {denizen.type}
-                                            </strong>
-                                            <span className="text-[9px] text-[#8f8597]">
-                                                HP {denizen.health} · ATK{" "}
-                                                {denizen.attack} · DEF{" "}
-                                                {denizen.defense}
-                                            </span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            disabled={assignmentLocked}
-                                            onClick={() => onAssign(denizen.id)}
-                                            className="shrink-0 cursor-pointer rounded-lg border border-[#a979c6]/30 bg-[#a979c6]/10 px-3 py-2 text-[9px] font-extrabold text-[#cda8df] uppercase transition hover:border-[#c99be1]/45 hover:bg-[#a979c6]/18 disabled:cursor-not-allowed disabled:opacity-35"
-                                        >
-                                            Add
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
+                    <div className="mt-4 grid gap-4 border-t border-white/8 pt-4">
+                        {assignmentLocked && (
+                            <span className="text-right text-[9px] font-bold text-[#c47d76]">
+                                Assignment locked during raids
+                            </span>
                         )}
+
+                        {capacity?.kind === "resource" && (
+                            <AssignmentGroup
+                                title="Add a producer"
+                                emptyMessage="No unassigned producers. Recruit one from the Denizens tab first."
+                                fullMessage="All producer slots in this room are filled."
+                                denizens={unassignedProducers}
+                                slotsOpen={producerSlotsOpen}
+                                resources={resources}
+                                assignmentLocked={assignmentLocked}
+                                role={DenizenRole.GATHERER}
+                                onAssign={onAssign}
+                            />
+                        )}
+
+                        <AssignmentGroup
+                            title="Add a defender"
+                            emptyMessage="No unassigned defenders. Recruit one from the Denizens tab first."
+                            fullMessage="All defender slots in this room are filled."
+                            denizens={unassignedDefenders}
+                            slotsOpen={defenderSlotsOpen}
+                            resources={resources}
+                            assignmentLocked={assignmentLocked}
+                            role={DenizenRole.DEFENDER}
+                            onAssign={onAssign}
+                        />
                     </div>
                 </>
             )}
         </section>
+    );
+}
+
+function AssignmentGroup({
+    title,
+    emptyMessage,
+    fullMessage,
+    denizens,
+    slotsOpen,
+    resources,
+    assignmentLocked,
+    role,
+    onAssign,
+}: {
+    title: string;
+    emptyMessage: string;
+    fullMessage: string;
+    denizens: readonly DenizenData[];
+    slotsOpen: boolean;
+    resources: ResourceSnapshot["resources"];
+    assignmentLocked: boolean;
+    role: DenizenRole;
+    onAssign: (denizenId: EntityId) => boolean;
+}) {
+    const cost = getDenizenAssignmentCost(role);
+    const canAfford = resources[cost.resource].value >= cost.amount;
+
+    return (
+        <div>
+            <div className="mb-2.5 flex items-center justify-between gap-3">
+                <h3 className="m-0 text-[9px] font-extrabold tracking-[.14em] text-[#8f8592] uppercase">
+                    {title}
+                </h3>
+                <span
+                    className={`text-[9px] font-bold ${canAfford ? "text-[#d9b766]" : "text-[#c47d76]"}`}
+                >
+                    {cost.amount} {getResourceLabel(cost.resource)}
+                </span>
+            </div>
+
+            {!slotsOpen ? (
+                <p className="m-0 rounded-[10px] border border-white/7 bg-white/3 p-3 text-center text-[10px] text-[#8f8597]">
+                    {fullMessage}
+                </p>
+            ) : denizens.length === 0 ? (
+                <p className="m-0 rounded-[10px] border border-white/7 bg-white/3 p-3 text-center text-[10px] leading-relaxed text-[#8f8597]">
+                    {emptyMessage}
+                </p>
+            ) : (
+                <div className="grid gap-2">
+                    {denizens.map((denizen) => (
+                        <div
+                            key={denizen.id}
+                            className="flex items-center justify-between gap-3 rounded-lg border border-[#a979c6]/16 bg-[#a979c6]/6 px-3 py-2.5"
+                        >
+                            <div className="min-w-0">
+                                <strong className="block truncate text-[11px] text-[#ddd3df] capitalize">
+                                    {denizen.type}
+                                </strong>
+                                <span className="text-[9px] text-[#8f8597]">
+                                    {role === DenizenRole.GATHERER
+                                        ? `Production +${denizen.gatheringPower.toFixed(1)}/sec`
+                                        : `HP ${denizen.health} · ATK ${denizen.attack} · DEF ${denizen.defense}`}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={assignmentLocked || !canAfford}
+                                onClick={() => onAssign(denizen.id)}
+                                className="shrink-0 cursor-pointer rounded-lg border border-[#a979c6]/30 bg-[#a979c6]/10 px-3 py-2 text-[9px] font-extrabold text-[#cda8df] uppercase transition hover:border-[#c99be1]/45 hover:bg-[#a979c6]/18 disabled:cursor-not-allowed disabled:opacity-35"
+                            >
+                                {!canAfford
+                                    ? "Need resources"
+                                    : `Add · ${cost.amount}`}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
 

@@ -13,7 +13,8 @@ import type {
 } from "./game/rooms/RoomPopulationManager";
 import {
     DungeonScene,
-    type DefenderRoomOption,
+    type DenizenRoomOption,
+    type DungeonProgressionSnapshot,
     type RoomDetails,
 } from "./game/scenes/DungeonScene";
 import type { WaveStatus } from "./game/waves/WaveManager";
@@ -52,15 +53,30 @@ const INITIAL_ROSTER: DenizenRosterSnapshot = {
     capacity: 8,
 };
 
+const INITIAL_PROGRESSION: DungeonProgressionSnapshot = {
+    level: 1,
+    nextExpansion: {
+        level: 2,
+        waveRequired: 3,
+        costs: [
+            { resource: "stone", amount: 150 },
+            { resource: "essence", amount: 50 },
+        ],
+        denizenCapacityReward: 2,
+    },
+};
+
 type PanelTab = "room" | "denizens" | "stats";
 
 function App() {
     const [wave, setWave] = useState(INITIAL_STATUS);
     const [resourceState, setResourceState] = useState(INITIAL_RESOURCES);
     const [denizenRoster, setDenizenRoster] = useState(INITIAL_ROSTER);
-    const [defenderRooms, setDefenderRooms] = useState<
-        readonly DefenderRoomOption[]
+    const [denizenRooms, setDenizenRooms] = useState<
+        readonly DenizenRoomOption[]
     >([]);
+    const [progression, setProgression] =
+        useState<DungeonProgressionSnapshot>(INITIAL_PROGRESSION);
     const [sceneReady, setSceneReady] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<RoomDetails | null>(null);
     const [panelOpen, setPanelOpen] = useState(true);
@@ -79,8 +95,8 @@ function App() {
     useEffect(() => {
         const handleRoster = (snapshot: DenizenRosterSnapshot): void => {
             setDenizenRoster(snapshot);
-            setDefenderRooms(
-                dungeonSceneRef.current?.getDefenderRoomOptions() ?? [],
+            setDenizenRooms(
+                dungeonSceneRef.current?.getDenizenRoomOptions() ?? [],
             );
         };
 
@@ -88,6 +104,17 @@ function App() {
 
         return () => {
             EventBus.off("denizen-roster-changed", handleRoster);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleProgression = (
+            snapshot: DungeonProgressionSnapshot,
+        ): void => setProgression(snapshot);
+
+        EventBus.on("dungeon-progression-changed", handleProgression);
+        return () => {
+            EventBus.off("dungeon-progression-changed", handleProgression);
         };
     }, []);
 
@@ -112,8 +139,8 @@ function App() {
             setActiveTab("room");
         };
         const handlePopulation = (snapshot: RoomPopulationSnapshot): void => {
-            setDefenderRooms(
-                dungeonSceneRef.current?.getDefenderRoomOptions() ?? [],
+            setDenizenRooms(
+                dungeonSceneRef.current?.getDenizenRoomOptions() ?? [],
             );
             setSelectedRoom((current) => {
                 if (!current || current.room.id !== snapshot.roomId)
@@ -138,7 +165,8 @@ function App() {
 
         dungeonSceneRef.current = scene;
         setDenizenRoster(scene.getDenizenRoster());
-        setDefenderRooms(scene.getDefenderRoomOptions());
+        setDenizenRooms(scene.getDenizenRoomOptions());
+        setProgression(scene.getDungeonProgression());
         setSceneReady(true);
     }, []);
     const getScene = (): DungeonScene | null => dungeonSceneRef.current;
@@ -148,15 +176,18 @@ function App() {
             getScene()?.upgradeSelectedRoom(selectedRoom.room.id, slot);
     };
 
-    const recruitDefender = (type: DenizenType): boolean =>
-        getScene()?.recruitDefender(type) ?? false;
+    const recruitDenizen = (type: DenizenType): boolean =>
+        getScene()?.recruitDenizen(type) ?? false;
 
-    const assignDefender = (denizenId: string, roomId: string): boolean =>
+    const assignDenizen = (denizenId: string, roomId: string): boolean =>
         !waveActive &&
-        (getScene()?.assignDefenderToRoom(denizenId, roomId) ?? false);
+        (getScene()?.assignDenizenToRoom(denizenId, roomId) ?? false);
 
-    const unassignDefender = (denizenId: string): boolean =>
-        !waveActive && (getScene()?.unassignDefender(denizenId) ?? false);
+    const unassignDenizen = (denizenId: string): boolean =>
+        !waveActive && (getScene()?.unassignDenizen(denizenId) ?? false);
+
+    const completedWaves = Math.max(0, wave.waveNumber - (waveActive ? 1 : 0));
+    const expansion = progression.nextExpansion;
 
     return (
         <main className="game-shell-react">
@@ -187,24 +218,22 @@ function App() {
                         capacity: denizenRoster.capacity,
                     }}
                     dungeonPower={1240}
-                    dungeonLevel={1}
+                    dungeonLevel={progression.level}
                     nextLevel={{
-                        waveRequired: 3,
-                        waveDefeated: wave.waveNumber > 3,
-                        costs: [
-                            {
-                                resource: "Stone",
-                                current: resourceState.resources.stone.value,
-                                required: 150,
-                            },
-                            {
-                                resource: "Essence",
-                                current: resourceState.resources.essence.value,
-                                required: 50,
-                            },
-                        ],
-                        roomCapacityReward: 2,
+                        waveRequired: expansion.waveRequired,
+                        waveDefeated: completedWaves >= expansion.waveRequired,
+                        costs: expansion.costs.map((cost) => ({
+                            resource:
+                                cost.resource.charAt(0).toUpperCase() +
+                                cost.resource.slice(1),
+                            current:
+                                resourceState.resources[cost.resource].value,
+                            required: cost.amount,
+                        })),
+                        denizenCapacityReward: expansion.denizenCapacityReward,
                     }}
+                    expansionLocked={waveActive}
+                    onExpandDungeon={() => getScene()?.expandDungeon()}
                 />
                 <section className="game-viewport">
                     <PhaserGame
@@ -340,40 +369,32 @@ function App() {
                                 <StatsPanel
                                     resources={resourceState}
                                     waveActive={waveActive}
-                                    completedWaves={Math.max(
-                                        0,
-                                        wave.waveNumber -
-                                            (wave.state === "spawning" ||
-                                            wave.state === "advancing"
-                                                ? 1
-                                                : 0),
-                                    )}
+                                    completedWaves={completedWaves}
                                 />
                             ) : activeTab === "denizens" ? (
                                 <DenizenPanel
                                     roster={denizenRoster}
-                                    rooms={defenderRooms}
-                                    supplies={
-                                        resourceState.resources.supplies.value
-                                    }
+                                    rooms={denizenRooms}
+                                    resources={resourceState.resources}
                                     assignmentLocked={waveActive}
-                                    onRecruit={recruitDefender}
-                                    onAssign={assignDefender}
-                                    onUnassign={unassignDefender}
+                                    onRecruit={recruitDenizen}
+                                    onAssign={assignDenizen}
+                                    onUnassign={unassignDenizen}
                                 />
                             ) : selectedRoom ? (
                                 <RoomDetailsPanel
                                     details={selectedRoom}
                                     roster={denizenRoster}
+                                    resources={resourceState.resources}
                                     assignmentLocked={waveActive}
                                     onUpgrade={upgradeRoom}
                                     onAssign={(denizenId) =>
-                                        assignDefender(
+                                        assignDenizen(
                                             denizenId,
                                             selectedRoom.room.id,
                                         )
                                     }
-                                    onUnassign={unassignDefender}
+                                    onUnassign={unassignDenizen}
                                     onClose={() => setSelectedRoom(null)}
                                 />
                             ) : (
@@ -433,4 +454,3 @@ function Metric({
         </div>
     );
 }
-

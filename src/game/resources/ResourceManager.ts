@@ -8,12 +8,15 @@ export interface DungeonResource {
     capacity: number;
 }
 
-type ResourceValues = Record<DungeonResourceId, number>;
-
 export interface ResourceSnapshot {
     resources: Record<DungeonResourceId, DungeonResource>;
-    incomePerSecond: ResourceValues;
-    totalEarned: ResourceValues;
+    incomePerSecond: Record<DungeonResourceId, number>;
+    totalEarned: Record<DungeonResourceId, number>;
+}
+
+export interface ResourceCost {
+    resource: DungeonResourceId;
+    amount: number;
 }
 
 const STARTING_RESOURCES: ResourceSnapshot["resources"] = {
@@ -22,24 +25,31 @@ const STARTING_RESOURCES: ResourceSnapshot["resources"] = {
     supplies: { id: "supplies", value: 34, capacity: 100 },
 };
 
-const PRODUCTION_WEIGHTS: ResourceValues = {
+// Each point of room production is divided among the current prototype
+// resources. These values are intentionally centralized for later balancing.
+const PRODUCTION_WEIGHTS: Record<DungeonResourceId, number> = {
     essence: 0.25,
     stone: 0.5,
     supplies: 1,
 };
 
-const createEmptyResourceValues = (): ResourceValues => ({
-    essence: 0,
-    stone: 0,
-    supplies: 0,
-});
-
 export class ResourceManager {
     private readonly resources: ResourceSnapshot["resources"];
-    private readonly fractions = createEmptyResourceValues();
-    private readonly totalEarned = createEmptyResourceValues();
-    private incomePerSecond = createEmptyResourceValues();
-    private lastProductionPerSecond = 0;
+    private readonly fractions: Record<DungeonResourceId, number> = {
+        essence: 0,
+        stone: 0,
+        supplies: 0,
+    };
+    private readonly totalEarned: Record<DungeonResourceId, number> = {
+        essence: 0,
+        stone: 0,
+        supplies: 0,
+    };
+    private incomePerSecond: Record<DungeonResourceId, number> = {
+        essence: 0,
+        stone: 0,
+        supplies: 0,
+    };
 
     constructor() {
         this.resources = {
@@ -47,58 +57,79 @@ export class ResourceManager {
             stone: { ...STARTING_RESOURCES.stone },
             supplies: { ...STARTING_RESOURCES.supplies },
         };
-
         this.emitSnapshot();
     }
 
     update(deltaMs: number, productionPerSecond: number): void {
-        if (deltaMs <= 0 || productionPerSecond <= 0) {
-            return;
-        }
+        if (deltaMs <= 0 || productionPerSecond <= 0) return;
+
+        this.incomePerSecond = {
+            essence: productionPerSecond * PRODUCTION_WEIGHTS.essence,
+            stone: productionPerSecond * PRODUCTION_WEIGHTS.stone,
+            supplies: productionPerSecond * PRODUCTION_WEIGHTS.supplies,
+        };
 
         let changed = false;
-
-        if (productionPerSecond !== this.lastProductionPerSecond) {
-            this.lastProductionPerSecond = productionPerSecond;
-            this.updateIncomeRates(productionPerSecond);
-            changed = true;
-        }
-
         const elapsedSeconds = deltaMs / 1000;
 
         for (const id of Object.keys(this.resources) as DungeonResourceId[]) {
             const resource = this.resources[id];
-
-            if (resource.value >= resource.capacity) {
-                continue;
-            }
+            if (resource.value >= resource.capacity) continue;
 
             this.fractions[id] +=
                 productionPerSecond * PRODUCTION_WEIGHTS[id] * elapsedSeconds;
-
             const wholeUnits = Math.floor(this.fractions[id]);
-
-            if (wholeUnits < 1) {
-                continue;
-            }
+            if (wholeUnits < 1) continue;
 
             const gained = Math.min(
                 wholeUnits,
                 resource.capacity - resource.value,
             );
-
             resource.value += gained;
             this.totalEarned[id] += gained;
             this.fractions[id] -= wholeUnits;
-
-            if (gained > 0) {
-                changed = true;
-            }
+            changed = changed || gained > 0;
         }
 
-        if (changed) {
-            this.emitSnapshot();
+        if (changed) this.emitSnapshot();
+    }
+
+    canAfford(id: DungeonResourceId, amount: number): boolean {
+        return amount >= 0 && this.resources[id].value >= amount;
+    }
+
+    canAffordAll(costs: readonly ResourceCost[]): boolean {
+        return costs.every(
+            (cost) =>
+                Number.isFinite(cost.amount) &&
+                cost.amount >= 0 &&
+                this.canAfford(cost.resource, cost.amount),
+        );
+    }
+
+    spend(id: DungeonResourceId, amount: number): boolean {
+        if (
+            !Number.isFinite(amount) ||
+            amount < 0 ||
+            !this.canAfford(id, amount)
+        ) {
+            return false;
         }
+
+        this.resources[id].value -= amount;
+        this.emitSnapshot();
+        return true;
+    }
+
+    spendAll(costs: readonly ResourceCost[]): boolean {
+        if (!this.canAffordAll(costs)) return false;
+
+        for (const cost of costs) {
+            this.resources[cost.resource].value -= cost.amount;
+        }
+
+        this.emitSnapshot();
+        return true;
     }
 
     getSnapshot(): ResourceSnapshot {
@@ -113,26 +144,7 @@ export class ResourceManager {
         };
     }
 
-    private updateIncomeRates(productionPerSecond: number): void {
-        this.incomePerSecond = {
-            essence: productionPerSecond * PRODUCTION_WEIGHTS.essence,
-            stone: productionPerSecond * PRODUCTION_WEIGHTS.stone,
-            supplies: productionPerSecond * PRODUCTION_WEIGHTS.supplies,
-        };
-    }
-
     private emitSnapshot(): void {
         EventBus.emit("resources-changed", this.getSnapshot());
-    }
-
-    spend(id: DungeonResourceId, amount: number): boolean {
-        if (!Number.isFinite(amount) || amount <= 0) return false;
-
-        const resource = this.resources[id];
-        if (resource.value < amount) return false;
-
-        resource.value -= amount;
-        this.emitSnapshot();
-        return true;
     }
 }

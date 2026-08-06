@@ -163,6 +163,14 @@ export class WaveManager {
         );
     }
 
+    getStatus(): WaveStatus {
+        return { ...this.status };
+    }
+
+    getCompletedWaveCount(): number {
+        return Math.max(0, this.status.waveNumber - (this.isActive() ? 1 : 0));
+    }
+
     destroy(): void {
         this.destroyed = true;
         for (const controller of this.controllers) controller.destroy();

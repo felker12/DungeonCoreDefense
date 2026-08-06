@@ -1,13 +1,14 @@
 import { Scene } from "phaser";
 import { DungeonCameraController } from "../camera/DungeonCameraController";
 import type { EntityId } from "../components/DungeonData";
-import type { DenizenType } from "../components/entityComponents/entityData";
+import {
+    DenizenRole,
+    type DenizenType,
+} from "../components/entityComponents/entityData";
 import type { DungeonRoom } from "../components/mapComponents/DungeonRoom";
 import { initialDungeon } from "../data/initialDungeon";
-import {
-    DEFENDER_OFFERS,
-    createDefender,
-} from "../denizens/DenizenRecruitment";
+import { getDenizenAssignmentCost } from "../denizens/DenizenAssignment";
+import { DENIZEN_OFFERS, createDenizen } from "../denizens/DenizenRecruitment";
 import { EventBus } from "../EventBus";
 import { validateDungeonMap } from "../pathfinding/validateDungeonMap";
 import { RoomPopulationManager } from "../rooms/RoomPopulationManager";
@@ -16,20 +17,41 @@ import type {
     RoomPopulationSnapshot,
     ResourceSlotType,
 } from "../rooms/RoomPopulationManager";
-import { ResourceManager } from "../resources/ResourceManager";
+import {
+    ResourceManager,
+    type ResourceCost,
+} from "../resources/ResourceManager";
 import { DungeonMapView } from "../views/DungeonMapView";
 import { WaveManager } from "../waves/WaveManager";
+
+const EXPANSION_CAPACITY_REWARD = 2;
 
 export interface RoomDetails {
     room: DungeonRoom;
     population: RoomPopulationSnapshot | null;
 }
 
-export interface DefenderRoomOption {
+export interface DenizenRoomOption {
     id: EntityId;
     name: string;
-    assigned: number;
-    capacity: number;
+    assignedDefenders: number;
+    defenderCapacity: number;
+    assignedProducers: number;
+    producerCapacity: number;
+}
+
+export type DefenderRoomOption = DenizenRoomOption;
+
+export interface DungeonExpansionRequirement {
+    level: number;
+    waveRequired: number;
+    costs: readonly ResourceCost[];
+    denizenCapacityReward: number;
+}
+
+export interface DungeonProgressionSnapshot {
+    level: number;
+    nextExpansion: DungeonExpansionRequirement;
 }
 
 export class DungeonScene extends Scene {
@@ -40,6 +62,7 @@ export class DungeonScene extends Scene {
     private resourceManager?: ResourceManager;
     private initialCenterFrame?: number;
     private nextDenizenId = 1;
+    private dungeonLevel = 1;
 
     constructor() {
         super("DungeonScene");
@@ -83,8 +106,6 @@ export class DungeonScene extends Scene {
             { southWorldPadding: 4500 },
         );
 
-        // The explicit CSS grid gives Phaser a stable map cell. Wait one paint,
-        // fit to that cell once, then reveal the correctly framed dungeon.
         this.initialCenterFrame = requestAnimationFrame(() => {
             this.initialCenterFrame = undefined;
             if (!this.scene.isActive() || !this.cameraController) return;
@@ -92,8 +113,8 @@ export class DungeonScene extends Scene {
             this.cameraController.initializeViewport();
             this.mapView?.setVisible(true);
         });
+
         this.waveManager = new WaveManager(this, initialDungeon, {
-            // Remove the seed when you want a different sequence each reload.
             seed: 1337,
             partySpawnInterval: 1400,
             minPartySize: 1,
@@ -111,6 +132,7 @@ export class DungeonScene extends Scene {
             rosterCapacity: 8,
         });
         this.resourceManager = new ResourceManager();
+
         for (const room of initialDungeon.rooms) {
             const snapshot = this.roomPopulation.getSnapshot(room.id);
             if (snapshot) EventBus.emit("room-population-changed", snapshot);
@@ -162,7 +184,7 @@ export class DungeonScene extends Scene {
         );
     }
 
-    getDefenderRoomOptions(): DefenderRoomOption[] {
+    getDenizenRoomOptions(): DenizenRoomOption[] {
         if (!this.roomPopulation) return [];
 
         return initialDungeon.rooms.flatMap((room) => {
@@ -173,55 +195,158 @@ export class DungeonScene extends Scene {
                 {
                     id: room.id,
                     name: room.name,
-                    assigned: population.assignedDefenders,
-                    capacity: population.capacity.defenders,
+                    assignedDefenders: population.assignedDefenders,
+                    defenderCapacity: population.capacity.defenders,
+                    assignedProducers: population.assignedGatherers,
+                    producerCapacity:
+                        population.capacity.kind === "resource"
+                            ? population.capacity.gatherers
+                            : 0,
                 },
             ];
         });
     }
 
-    assignDefenderToRoom(denizenId: EntityId, roomId: EntityId): boolean {
-        if (this.waveManager?.isActive()) return false;
-        return this.roomPopulation?.assignDenizen(denizenId, roomId) ?? false;
+    getDefenderRoomOptions(): DenizenRoomOption[] {
+        return this.getDenizenRoomOptions();
     }
 
-    unassignDefender(denizenId: EntityId): boolean {
+    assignDenizenToRoom(denizenId: EntityId, roomId: EntityId): boolean {
         if (this.waveManager?.isActive()) return false;
-        return this.roomPopulation?.unassignDenizen(denizenId) ?? false;
-    }
 
-    recruitDefender(type: DenizenType): boolean {
         const population = this.roomPopulation;
         const resources = this.resourceManager;
-        const offer = DEFENDER_OFFERS.find(
-            (candidate) => candidate.type === type,
-        );
-
-        if (!population || !resources || !offer) return false;
-
-        const roster = population.getRosterSnapshot();
-
+        const denizen = population?.getDenizen(denizenId);
         if (
-            roster.denizens.length >= roster.capacity ||
-            resources.getSnapshot().resources.supplies.value < offer.cost
+            !population ||
+            !resources ||
+            !denizen ||
+            !population.canAssignDenizen(denizenId, roomId)
         ) {
             return false;
         }
 
-        const defender = createDefender(
-            offer,
-            `recruited-defender-${this.nextDenizenId++}`,
+        const cost = getDenizenAssignmentCost(denizen.role);
+        if (!resources.spend(cost.resource, cost.amount)) return false;
+
+        return population.assignDenizen(denizenId, roomId);
+    }
+
+    assignDefenderToRoom(denizenId: EntityId, roomId: EntityId): boolean {
+        return this.assignDenizenToRoom(denizenId, roomId);
+    }
+
+    unassignDenizen(denizenId: EntityId): boolean {
+        if (this.waveManager?.isActive()) return false;
+        return this.roomPopulation?.unassignDenizen(denizenId) ?? false;
+    }
+
+    unassignDefender(denizenId: EntityId): boolean {
+        return this.unassignDenizen(denizenId);
+    }
+
+    recruitDenizen(type: DenizenType): boolean {
+        const population = this.roomPopulation;
+        const resources = this.resourceManager;
+        const offer = DENIZEN_OFFERS.find(
+            (candidate) => candidate.type === type,
         );
+        if (!population || !resources || !offer) return false;
 
-        // Add the defender first. This prevents charging the player if adding fails.
-        if (!population.addDenizen(defender)) return false;
-
-        if (!resources.spend("supplies", offer.cost)) {
-            population.removeDenizen(defender.id);
+        const roster = population.getRosterSnapshot();
+        if (
+            roster.denizens.length >= roster.capacity ||
+            !resources.canAfford("supplies", offer.cost)
+        ) {
             return false;
         }
 
+        const roleLabel =
+            offer.role === DenizenRole.GATHERER ? "producer" : "defender";
+        const denizen = createDenizen(
+            offer,
+            `recruited-${roleLabel}-${this.nextDenizenId++}`,
+        );
+
+        if (!resources.spend("supplies", offer.cost)) return false;
+        if (population.addDenizen(denizen)) return true;
+
+        return false;
+    }
+
+    recruitDefender(type: DenizenType): boolean {
+        return this.recruitDenizen(type);
+    }
+
+    getDungeonProgression(): DungeonProgressionSnapshot {
+        return {
+            level: this.dungeonLevel,
+            nextExpansion: this.createExpansionRequirement(),
+        };
+    }
+
+    expandDungeon(): boolean {
+        const resources = this.resourceManager;
+        const population = this.roomPopulation;
+        const waves = this.waveManager;
+        if (!resources || !population || !waves || waves.isActive()) {
+            return false;
+        }
+
+        const requirement = this.createExpansionRequirement();
+        const completedWaveCount = waves.getCompletedWaveCount();
+
+        if (
+            completedWaveCount < requirement.waveRequired ||
+            !resources.canAffordAll(requirement.costs)
+        ) {
+            return false;
+        }
+
+        if (!resources.spendAll(requirement.costs)) return false;
+        if (
+            !population.expandRosterCapacity(requirement.denizenCapacityReward)
+        ) {
+            return false;
+        }
+
+        this.dungeonLevel += 1;
+        this.emitProgression();
         return true;
     }
-}
 
+    private createExpansionRequirement(): DungeonExpansionRequirement {
+        const resources = this.resourceManager?.getSnapshot().resources;
+        const stoneCapacity = resources?.stone.capacity ?? 150;
+        const essenceCapacity = resources?.essence.capacity ?? 250;
+
+        return {
+            level: this.dungeonLevel + 1,
+            waveRequired: this.dungeonLevel * 3,
+            costs: [
+                {
+                    resource: "stone",
+                    amount: Math.min(
+                        stoneCapacity,
+                        150 + (this.dungeonLevel - 1) * 25,
+                    ),
+                },
+                {
+                    resource: "essence",
+                    amount: Math.min(
+                        essenceCapacity,
+                        50 + (this.dungeonLevel - 1) * 25,
+                    ),
+                },
+            ],
+            denizenCapacityReward: EXPANSION_CAPACITY_REWARD,
+        };
+    }
+
+    private emitProgression(): void {
+        EventBus.emit(
+            "dungeon-progression-changed",
+            this.getDungeonProgression(),
+        );
+    }
+}

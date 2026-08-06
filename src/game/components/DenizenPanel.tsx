@@ -1,17 +1,26 @@
 import { useState } from "react";
 import type { EntityId } from "./DungeonData";
-import type { DenizenType } from "./entityComponents/entityData";
-import type { DenizenRosterSnapshot } from "../rooms/RoomPopulationManager";
-import type { DefenderRoomOption } from "../scenes/DungeonScene";
 import {
-    DEFENDER_OFFERS,
-    type DefenderOffer,
+    DenizenRole,
+    type DenizenData,
+    type DenizenType,
+} from "./entityComponents/entityData";
+import {
+    getDenizenAssignmentCost,
+    getResourceLabel,
+} from "../denizens/DenizenAssignment";
+import {
+    DENIZEN_OFFERS,
+    type DenizenOffer,
 } from "../denizens/DenizenRecruitment";
+import type { ResourceSnapshot } from "../resources/ResourceManager";
+import type { DenizenRosterSnapshot } from "../rooms/RoomPopulationManager";
+import type { DenizenRoomOption } from "../scenes/DungeonScene";
 
 interface DenizenPanelProps {
     roster: DenizenRosterSnapshot;
-    rooms: readonly DefenderRoomOption[];
-    supplies: number;
+    rooms: readonly DenizenRoomOption[];
+    resources: ResourceSnapshot["resources"];
     assignmentLocked: boolean;
     onRecruit: (type: DenizenType) => boolean;
     onAssign: (denizenId: EntityId, roomId: EntityId) => boolean;
@@ -23,7 +32,7 @@ const formatNumber = new Intl.NumberFormat("en-US");
 export function DenizenPanel({
     roster,
     rooms,
-    supplies,
+    resources,
     assignmentLocked,
     onRecruit,
     onAssign,
@@ -45,7 +54,7 @@ export function DenizenPanel({
                         id="denizen-roster-title"
                         className="mt-1.5 mb-0 font-serif text-[24px] text-[#f5efe4]"
                     >
-                        Recruit defenders
+                        Recruit denizens
                     </h2>
                 </div>
                 <span
@@ -60,20 +69,20 @@ export function DenizenPanel({
                     Available supplies
                 </span>
                 <strong className="text-sm text-[#e6be67]">
-                    ● {formatNumber.format(supplies)}
+                    ● {formatNumber.format(resources.supplies.value)}
                 </strong>
             </div>
 
             <div className="grid gap-3">
-                {DEFENDER_OFFERS.map((offer) => (
+                {DENIZEN_OFFERS.map((offer) => (
                     <RecruitCard
-                        key={offer.type}
+                        key={`${offer.role}-${offer.type}`}
                         offer={offer}
-                        disabled={full || supplies < offer.cost}
+                        disabled={full || resources.supplies.value < offer.cost}
                         reason={
                             full
                                 ? "Roster full"
-                                : supplies < offer.cost
+                                : resources.supplies.value < offer.cost
                                   ? "Need more supplies"
                                   : null
                         }
@@ -86,7 +95,7 @@ export function DenizenPanel({
                 <div className="mt-5 border-t border-white/8 pt-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                         <h3 className="m-0 text-[9px] font-extrabold tracking-[.14em] text-[#8f8592] uppercase">
-                            Owned defenders
+                            Owned denizens
                         </h3>
                         {assignmentLocked && (
                             <span className="text-[9px] font-bold text-[#c47d76]">
@@ -100,8 +109,8 @@ export function DenizenPanel({
                             const assignedRoom = rooms.find(
                                 (room) => room.id === denizen.assignedRoomId,
                             );
-                            const availableRooms = rooms.filter(
-                                (room) => room.assigned < room.capacity,
+                            const availableRooms = rooms.filter((room) =>
+                                roomHasOpenSlot(room, denizen),
                             );
                             const savedRoomId = selectedRooms[denizen.id];
                             const selectedRoomId = availableRooms.some(
@@ -109,6 +118,9 @@ export function DenizenPanel({
                             )
                                 ? savedRoomId
                                 : (availableRooms[0]?.id ?? "");
+                            const cost = getDenizenAssignmentCost(denizen.role);
+                            const canAfford =
+                                resources[cost.resource].value >= cost.amount;
 
                             return (
                                 <article
@@ -118,12 +130,14 @@ export function DenizenPanel({
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
                                             <strong className="text-[11px] text-[#ddd3df] capitalize">
-                                                {denizen.type}
+                                                {denizen.type}{" "}
+                                                {getRoleLabel(denizen)}
                                             </strong>
                                             <p className="mt-1 mb-0 text-[9px] text-[#8f8597]">
-                                                HP {denizen.health} · ATK{" "}
-                                                {denizen.attack} · DEF{" "}
-                                                {denizen.defense}
+                                                {denizen.role ===
+                                                DenizenRole.GATHERER
+                                                    ? `Production +${denizen.gatheringPower.toFixed(1)}/sec`
+                                                    : `HP ${denizen.health} · ATK ${denizen.attack} · DEF ${denizen.defense}`}
                                             </p>
                                         </div>
                                         <span
@@ -169,7 +183,7 @@ export function DenizenPanel({
                                             >
                                                 {availableRooms.length === 0 ? (
                                                     <option value="">
-                                                        No open defender slots
+                                                        No compatible open slots
                                                     </option>
                                                 ) : (
                                                     availableRooms.map(
@@ -179,8 +193,11 @@ export function DenizenPanel({
                                                                 value={room.id}
                                                             >
                                                                 {room.name} (
-                                                                {room.assigned}/
-                                                                {room.capacity})
+                                                                {getOccupancy(
+                                                                    room,
+                                                                    denizen,
+                                                                )}
+                                                                )
                                                             </option>
                                                         ),
                                                     )
@@ -190,7 +207,8 @@ export function DenizenPanel({
                                                 type="button"
                                                 disabled={
                                                     assignmentLocked ||
-                                                    !selectedRoomId
+                                                    !selectedRoomId ||
+                                                    !canAfford
                                                 }
                                                 onClick={() =>
                                                     onAssign(
@@ -198,9 +216,12 @@ export function DenizenPanel({
                                                         selectedRoomId,
                                                     )
                                                 }
+                                                title={`${cost.amount} ${getResourceLabel(cost.resource)}`}
                                                 className="cursor-pointer rounded-lg border border-[#a979c6]/30 bg-[#a979c6]/10 px-3 text-[9px] font-extrabold text-[#cda8df] uppercase disabled:cursor-not-allowed disabled:opacity-40"
                                             >
-                                                Assign
+                                                {canAfford
+                                                    ? `Assign · ${cost.amount}`
+                                                    : "Need resources"}
                                             </button>
                                         </div>
                                     )}
@@ -214,13 +235,32 @@ export function DenizenPanel({
     );
 }
 
+function roomHasOpenSlot(
+    room: DenizenRoomOption,
+    denizen: DenizenData,
+): boolean {
+    return denizen.role === DenizenRole.GATHERER
+        ? room.assignedProducers < room.producerCapacity
+        : room.assignedDefenders < room.defenderCapacity;
+}
+
+function getOccupancy(room: DenizenRoomOption, denizen: DenizenData): string {
+    return denizen.role === DenizenRole.GATHERER
+        ? `${room.assignedProducers}/${room.producerCapacity}`
+        : `${room.assignedDefenders}/${room.defenderCapacity}`;
+}
+
+function getRoleLabel(denizen: DenizenData): string {
+    return denizen.role === DenizenRole.GATHERER ? "Producer" : "Defender";
+}
+
 function RecruitCard({
     offer,
     disabled,
     reason,
     onRecruit,
 }: {
-    offer: DefenderOffer;
+    offer: DenizenOffer;
     disabled: boolean;
     reason: string | null;
     onRecruit: () => void;
@@ -233,9 +273,16 @@ function RecruitCard({
                 </span>
                 <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                        <strong className="text-[13px] text-[#f0e9df]">
-                            {offer.name}
-                        </strong>
+                        <div>
+                            <strong className="block text-[13px] text-[#f0e9df]">
+                                {offer.name}
+                            </strong>
+                            <small className="text-[8px] font-bold tracking-[.08em] text-[#9d94a1] uppercase">
+                                {offer.role === DenizenRole.GATHERER
+                                    ? "Producer"
+                                    : "Defender"}
+                            </small>
+                        </div>
                         <span className="shrink-0 text-[11px] font-bold text-[#d9ad59]">
                             ● {offer.cost}
                         </span>
@@ -244,9 +291,15 @@ function RecruitCard({
                         {offer.description}
                     </p>
                     <div className="flex gap-3 text-[9px] font-bold text-[#9d94a1]">
-                        <span>HP {offer.health}</span>
-                        <span>ATK {offer.attack}</span>
-                        <span>DEF {offer.defense}</span>
+                        {offer.role === DenizenRole.GATHERER ? (
+                            <span>PROD +{offer.gatheringPower}/sec</span>
+                        ) : (
+                            <>
+                                <span>HP {offer.health}</span>
+                                <span>ATK {offer.attack}</span>
+                                <span>DEF {offer.defense}</span>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
@@ -256,9 +309,8 @@ function RecruitCard({
                 onClick={onRecruit}
                 className="mt-3 w-full cursor-pointer rounded-lg border border-[#d8aa4f]/35 bg-[#d8aa4f]/10 py-2 text-[10px] font-extrabold tracking-[.08em] text-[#e7cb89] uppercase transition hover:bg-[#d8aa4f]/18 disabled:cursor-not-allowed disabled:border-white/7 disabled:bg-white/3 disabled:text-[#6f6874]"
             >
-                {reason ?? "Recruit defender"}
+                {reason ?? "Recruit denizen"}
             </button>
         </article>
     );
 }
-

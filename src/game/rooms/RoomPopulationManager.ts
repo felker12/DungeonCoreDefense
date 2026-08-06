@@ -41,7 +41,7 @@ export class RoomPopulationManager {
     private readonly denizens = new Map<EntityId, DenizenData>();
     private readonly gathererRecoveryMs: number;
     private readonly baseProductionPerSecond: number;
-    private readonly rosterCapacity: number;
+    private rosterCapacity: number;
 
     constructor(
         private readonly dungeon: DungeonMap,
@@ -81,7 +81,12 @@ export class RoomPopulationManager {
         return true;
     }
 
-    assignDenizen(denizenId: EntityId, roomId: EntityId): boolean {
+    getDenizen(denizenId: EntityId): DenizenData | null {
+        const denizen = this.denizens.get(denizenId);
+        return denizen ? { ...denizen } : null;
+    }
+
+    canAssignDenizen(denizenId: EntityId, roomId: EntityId): boolean {
         const denizen = this.denizens.get(denizenId);
         const room = this.dungeon.rooms.find(
             (candidate) => candidate.id === roomId,
@@ -95,15 +100,22 @@ export class RoomPopulationManager {
         if (!snapshot) return false;
 
         if (denizen.role === DenizenRole.GATHERER) {
-            if (
-                capacity.kind !== "resource" ||
-                snapshot.assignedGatherers >= capacity.gatherers
-            ) {
-                return false;
-            }
-        } else if (snapshot.assignedDefenders >= capacity.defenders) {
-            return false;
+            return (
+                capacity.kind === "resource" &&
+                snapshot.assignedGatherers < capacity.gatherers
+            );
         }
+
+        return snapshot.assignedDefenders < capacity.defenders;
+    }
+
+    assignDenizen(denizenId: EntityId, roomId: EntityId): boolean {
+        if (!this.canAssignDenizen(denizenId, roomId)) return false;
+
+        const denizen = this.denizens.get(denizenId)!;
+        const room = this.dungeon.rooms.find(
+            (candidate) => candidate.id === roomId,
+        )!;
 
         denizen.assignedRoomId = roomId;
         if (!room.denizenIds.includes(denizenId)) {
@@ -205,6 +217,14 @@ export class RoomPopulationManager {
             })),
             capacity: this.rosterCapacity,
         };
+    }
+
+    expandRosterCapacity(amount: number): boolean {
+        if (!Number.isInteger(amount) || amount <= 0) return false;
+
+        this.rosterCapacity += amount;
+        this.emitRoster();
+        return true;
     }
 
     getSnapshot(roomId: EntityId): RoomPopulationSnapshot | null {
