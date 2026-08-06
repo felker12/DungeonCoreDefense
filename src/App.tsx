@@ -18,6 +18,8 @@ import {
     type DungeonConstructionSnapshot,
     type DenizenRoomOption,
     type DungeonProgressionSnapshot,
+    type DungeonSaveOperationResult,
+    type DungeonSaveStatus,
     type RoomDetails,
 } from "./game/scenes/DungeonScene";
 import type { WaveStatus } from "./game/waves/WaveManager";
@@ -87,6 +89,12 @@ const INITIAL_PROGRESSION: DungeonProgressionSnapshot = {
     },
 };
 
+const INITIAL_SAVE_STATUS: DungeonSaveStatus = {
+    hasSave: false,
+    lastSavedAt: null,
+    canSave: false,
+};
+
 type PanelTab = "room" | "denizens" | "stats";
 
 function App() {
@@ -108,6 +116,8 @@ function App() {
     const dungeonSceneRef = useRef<DungeonScene | null>(null);
     const [activeTab, setActiveTab] = useState<PanelTab>("room");
     const [mobileRaidOpen, setMobileRaidOpen] = useState(false);
+    const [saveStatus, setSaveStatus] =
+        useState<DungeonSaveStatus>(INITIAL_SAVE_STATUS);
 
     useEffect(() => {
         const handleStatus = (status: WaveStatus): void => setWave(status);
@@ -158,6 +168,15 @@ function App() {
         EventBus.on("resources-changed", handleResources);
         return () => {
             EventBus.off("resources-changed", handleResources);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleSaveStatus = (status: DungeonSaveStatus): void =>
+            setSaveStatus(status);
+        EventBus.on("dungeon-save-changed", handleSaveStatus);
+        return () => {
+            EventBus.off("dungeon-save-changed", handleSaveStatus);
         };
     }, []);
 
@@ -233,6 +252,9 @@ function App() {
         setDenizenRoster(scene.getDenizenRoster());
         setDenizenRooms(scene.getDenizenRoomOptions());
         setProgression(scene.getDungeonProgression());
+        setSaveStatus(scene.getSaveStatus());
+        setSelectedRoom(null);
+        setConstruction(null);
         setSceneReady(true);
     }, []);
     const getScene = (): DungeonScene | null => dungeonSceneRef.current;
@@ -278,6 +300,20 @@ function App() {
             !waveActive &&
             getScene()?.moveCoreToRoom(selectedRoom.room.id),
         );
+
+    const saveGame = (): boolean => getScene()?.saveGame() ?? false;
+
+    const exportSave = (): string | null =>
+        getScene()?.exportSavedGame() ?? null;
+
+    const importSave = (serializedSave: string): DungeonSaveOperationResult =>
+        getScene()?.importSavedGame(serializedSave) ?? {
+            success: false,
+            message: "The dungeon scene is not ready.",
+        };
+
+    const resetSave = (): boolean =>
+        getScene()?.resetSavedGame() ?? false;
 
     const completedWaves = wave.completedWaves;
     const expansion = progression.nextExpansion;
@@ -389,11 +425,24 @@ function App() {
                     <div className="command-panel-inner relative z-1 flex min-h-0 flex-1 flex-col">
                         <header className="command-panel-header border-b border-white/8 py-5 pr-14 pl-5.5">
                             <div className="command-panel-heading-row">
-                                <div className="text-[11px] font-extrabold tracking-[.18em] text-[#d9b766] uppercase">
-                                    <span className="mr-2 text-[#8f61c8]">
+                                <div className="flex min-w-0 items-center gap-2 text-[11px] font-extrabold tracking-[.18em] text-[#d9b766] uppercase">
+                                    <span className="shrink-0 text-[#8f61c8]">
                                         ◆
-                                    </span>{" "}
-                                    Dungeon command
+                                    </span>
+                                    <span className="truncate">Dungeon command</span>
+                                    <span
+                                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[8px] tracking-[.06em] ${saveStatus.hasSave ? "border-[#6f9f73]/28 bg-[#6f9f73]/9 text-[#91c796]" : "border-white/8 bg-white/3 text-[#716a75]"}`}
+                                        title={
+                                            saveStatus.lastSavedAt
+                                                ? `Saved ${new Date(saveStatus.lastSavedAt).toLocaleString()}`
+                                                : "No local save has been created yet"
+                                        }
+                                    >
+                                        <i
+                                            className={`size-1.5 rounded-full ${saveStatus.hasSave ? "bg-[#7fbd85] shadow-[0_0_7px_rgba(127,189,133,.65)]" : "bg-[#5d5661]"}`}
+                                        />
+                                        {saveStatus.hasSave ? "Saved" : "No save"}
+                                    </span>
                                 </div>
 
                                 <div className="mobile-command-actions">
@@ -541,6 +590,11 @@ function App() {
                                     resources={resourceState}
                                     waveActive={waveActive}
                                     completedWaves={completedWaves}
+                                    saveStatus={saveStatus}
+                                    onSave={saveGame}
+                                    onExportSave={exportSave}
+                                    onImportSave={importSave}
+                                    onResetSave={resetSave}
                                 />
                             ) : activeTab === "denizens" ? (
                                 <DenizenPanel

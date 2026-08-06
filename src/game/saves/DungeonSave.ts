@@ -4,8 +4,7 @@ import type { ResourceManagerState } from "../resources/ResourceManager";
 import type { RoomPopulationState } from "../rooms/RoomPopulationManager";
 
 export const DUNGEON_SAVE_VERSION = 1 as const;
-export const DUNGEON_SAVE_STORAGE_KEY =
-    "dungeon-core-defense.save.v1";
+export const DUNGEON_SAVE_STORAGE_KEY = "dungeon-core-defense.save.v1";
 
 export interface DungeonSaveCounters {
     nextDenizenId: number;
@@ -30,6 +29,10 @@ export type DungeonSavePayload = Omit<
     "version" | "savedAt"
 >;
 
+export type DungeonSaveParseResult =
+    | { success: true; save: DungeonSaveData }
+    | { success: false; message: string };
+
 export function loadDungeonSave(): DungeonSaveData | null {
     const storage = getStorage();
     if (!storage) return null;
@@ -38,8 +41,8 @@ export function loadDungeonSave(): DungeonSaveData | null {
         const raw = storage.getItem(DUNGEON_SAVE_STORAGE_KEY);
         if (!raw) return null;
 
-        const parsed: unknown = JSON.parse(raw);
-        if (isDungeonSaveData(parsed)) return parsed;
+        const parsed = parseDungeonSave(raw);
+        if (parsed.success) return parsed.save;
 
         storage.removeItem(DUNGEON_SAVE_STORAGE_KEY);
         return null;
@@ -52,22 +55,57 @@ export function loadDungeonSave(): DungeonSaveData | null {
 export function saveDungeonGame(
     payload: DungeonSavePayload,
 ): DungeonSaveData | null {
-    const storage = getStorage();
-    if (!storage) return null;
-
-    const save: DungeonSaveData = {
+    return writeDungeonSave({
         version: DUNGEON_SAVE_VERSION,
         savedAt: new Date().toISOString(),
         ...payload,
-    };
+    });
+}
 
+export function exportDungeonSave(): string | null {
+    const save = loadDungeonSave();
+    return save ? JSON.stringify(save, null, 2) : null;
+}
+
+export function parseDungeonSave(raw: string): DungeonSaveParseResult {
     try {
-        storage.setItem(DUNGEON_SAVE_STORAGE_KEY, JSON.stringify(save));
-        return save;
-    } catch (error) {
-        console.warn("Unable to write the dungeon save.", error);
-        return null;
+        const parsed: unknown = JSON.parse(raw);
+
+        if (
+            isRecord(parsed) &&
+            "version" in parsed &&
+            parsed.version !== DUNGEON_SAVE_VERSION
+        ) {
+            return {
+                success: false,
+                message: `This save uses unsupported version ${String(parsed.version)}.`,
+            };
+        }
+
+        if (!isDungeonSaveData(parsed)) {
+            return {
+                success: false,
+                message: "The selected file is not a valid dungeon save.",
+            };
+        }
+
+        return { success: true, save: parsed };
+    } catch {
+        return {
+            success: false,
+            message: "The selected file does not contain valid JSON.",
+        };
     }
+}
+
+export function replaceDungeonSave(
+    importedSave: DungeonSaveData,
+): DungeonSaveData | null {
+    return writeDungeonSave({
+        ...importedSave,
+        version: DUNGEON_SAVE_VERSION,
+        savedAt: new Date().toISOString(),
+    });
 }
 
 export function clearDungeonSave(): boolean {
@@ -80,6 +118,19 @@ export function clearDungeonSave(): boolean {
     } catch (error) {
         console.warn("Unable to clear the dungeon save.", error);
         return false;
+    }
+}
+
+function writeDungeonSave(save: DungeonSaveData): DungeonSaveData | null {
+    const storage = getStorage();
+    if (!storage) return null;
+
+    try {
+        storage.setItem(DUNGEON_SAVE_STORAGE_KEY, JSON.stringify(save));
+        return save;
+    } catch (error) {
+        console.warn("Unable to write the dungeon save.", error);
+        return null;
     }
 }
 

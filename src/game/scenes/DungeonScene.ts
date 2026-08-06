@@ -41,7 +41,10 @@ import { DENIZEN_OFFERS, createDenizen } from "../denizens/DenizenRecruitment";
 import { EventBus } from "../EventBus";
 import {
     clearDungeonSave,
+    exportDungeonSave,
     loadDungeonSave,
+    parseDungeonSave,
+    replaceDungeonSave,
     saveDungeonGame,
     type DungeonSaveData,
 } from "../saves/DungeonSave";
@@ -144,6 +147,11 @@ export interface DungeonSaveStatus {
     hasSave: boolean;
     lastSavedAt: string | null;
     canSave: boolean;
+}
+
+export interface DungeonSaveOperationResult {
+    success: boolean;
+    message: string;
 }
 
 export class DungeonScene extends Scene {
@@ -274,6 +282,56 @@ export class DungeonScene extends Scene {
         this.lastSavedAt = saved.savedAt;
         this.emitSaveStatus();
         return true;
+    }
+
+    exportSavedGame(): string | null {
+        if (this.getSaveStatus().canSave) {
+            this.saveGame();
+        }
+
+        return exportDungeonSave();
+    }
+
+    importSavedGame(serializedSave: string): DungeonSaveOperationResult {
+        if (this.waveManager?.isActive()) {
+            return {
+                success: false,
+                message: "Finish the active raid before importing a save.",
+            };
+        }
+
+        const parsed = parseDungeonSave(serializedSave);
+        if (!parsed.success) {
+            return { success: false, message: parsed.message };
+        }
+
+        try {
+            const dungeon = cloneDungeonMap(parsed.save.dungeon);
+            validateDungeonMap(dungeon);
+        } catch (error) {
+            console.warn("The imported dungeon map was invalid.", error);
+            return {
+                success: false,
+                message: "The imported save contains an invalid dungeon map.",
+            };
+        }
+
+        const imported = replaceDungeonSave(parsed.save);
+        if (!imported) {
+            return {
+                success: false,
+                message: "The browser could not store the imported save.",
+            };
+        }
+
+        this.hasSavedGame = true;
+        this.lastSavedAt = imported.savedAt;
+        this.emitSaveStatus();
+        this.scene.restart();
+        return {
+            success: true,
+            message: "Save imported. Reloading the dungeon.",
+        };
     }
 
     resetSavedGame(): boolean {
@@ -850,17 +908,9 @@ export class DungeonScene extends Scene {
             return false;
         }
 
-        const first = this.dungeon.rooms.find(
-            (room) => room.id === firstRoomId,
-        );
-        const second = this.dungeon.rooms.find(
-            (room) => room.id === secondRoomId,
-        );
-        if (
-            !first ||
-            !second ||
-            !areRoomsConnectable(this.dungeon, first, second)
-        ) {
+        const first = this.dungeon.rooms.find((room) => room.id === firstRoomId);
+        const second = this.dungeon.rooms.find((room) => room.id === secondRoomId);
+        if (!first || !second || !areRoomsConnectable(this.dungeon, first, second)) {
             return false;
         }
 
@@ -908,10 +958,7 @@ export class DungeonScene extends Scene {
         );
         if (connectionIndex < 0) return false;
 
-        const [connection] = this.dungeon.connections.splice(
-            connectionIndex,
-            1,
-        );
+        const [connection] = this.dungeon.connections.splice(connectionIndex, 1);
         this.mapView?.removeConnection(connection.id);
         this.refreshTopology();
         this.autosave();
@@ -1012,9 +1059,7 @@ export class DungeonScene extends Scene {
         roomId: EntityId,
         direction: CardinalDirection,
     ): boolean {
-        const room = this.dungeon.rooms.find(
-            (candidate) => candidate.id === roomId,
-        );
+        const room = this.dungeon.rooms.find((candidate) => candidate.id === roomId);
         if (!room) return false;
 
         return this.dungeon.connections.some((connection) => {
@@ -1067,10 +1112,7 @@ export class DungeonScene extends Scene {
     private restoreIdCounters(save: DungeonSaveData): void {
         this.nextRoomId = Math.max(
             save.counters.nextRoomId,
-            getNextNumericId(
-                this.dungeon.rooms.map((room) => room.id),
-                /^player-room-(\d+)$/,
-            ),
+            getNextNumericId(this.dungeon.rooms.map((room) => room.id), /^player-room-(\d+)$/),
         );
         this.nextConnectionId = Math.max(
             save.counters.nextConnectionId,
@@ -1124,4 +1166,3 @@ function getNextNumericId(ids: readonly EntityId[], pattern: RegExp): number {
     }
     return highest + 1;
 }
-
