@@ -2,6 +2,7 @@ import { Scene } from "phaser";
 import { DungeonCameraController } from "../camera/DungeonCameraController";
 import type { EntityId } from "../components/DungeonData";
 import { CombatManager } from "../combat/CombatManager";
+import type { RoomAttackersSnapshot } from "../combat/CombatTypes";
 import {
     DenizenRole,
     type DenizenType,
@@ -213,6 +214,10 @@ export class DungeonScene extends Scene {
                 remainingParties: 0,
             }
         );
+    }
+
+    getRoomAttackers(roomId: EntityId): RoomAttackersSnapshot | null {
+        return this.combatManager?.getRoomAttackersSnapshot(roomId) ?? null;
     }
 
     getDungeonCoreStatus(): DungeonCoreSnapshot {

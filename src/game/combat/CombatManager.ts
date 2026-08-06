@@ -11,6 +11,7 @@ import type { RoomPopulationManager } from "../rooms/RoomPopulationManager";
 import type { AdventurerParty } from "../waves/PartyData";
 import type {
     PartyCombatPresentation,
+    RoomAttackersSnapshot,
     RoomCombatOutcome,
     RoomEncounterResolver,
 } from "./CombatTypes";
@@ -56,6 +57,11 @@ export class CombatManager {
         }
     }
 
+    getRoomAttackersSnapshot(roomId: EntityId): RoomAttackersSnapshot | null {
+        const battle = this.battles.get(roomId);
+        return battle ? this.createRoomAttackersSnapshot(battle) : null;
+    }
+
     cancelAll(): void {
         for (const battle of [...this.battles.values()]) {
             this.finishBattle(battle, "defeated");
@@ -98,6 +104,7 @@ export class CombatManager {
                     );
                 }
             }
+            this.emitRoomAttackersSnapshot(battle);
         });
     }
 
@@ -145,11 +152,7 @@ export class CombatManager {
             return;
         }
 
-        this.attackWithDenizens(
-            battle,
-            survivingDenizens,
-            deltaMs,
-        );
+        this.attackWithDenizens(battle, survivingDenizens, deltaMs);
 
         if (this.getLivingAdventurers(battle).length === 0) {
             this.finishBattle(battle, "defeated");
@@ -205,6 +208,8 @@ export class CombatManager {
         denizens: readonly DenizenData[],
         deltaMs: number,
     ): void {
+        let attackerHealthChanged = false;
+
         for (const denizen of denizens) {
             const remaining =
                 (battle.denizenCooldowns.get(denizen.id) ??
@@ -239,6 +244,7 @@ export class CombatManager {
                     : denizen.attack;
             const damage = calculateDamage(attack, target.defense);
             target.health = Math.max(0, target.health - damage);
+            attackerHealthChanged = true;
 
             const owner = this.findPartyForAdventurer(battle, target.id);
             owner?.presentation.flashAdventurer(target.id);
@@ -259,6 +265,10 @@ export class CombatManager {
                     roomId: battle.room.id,
                 });
             }
+        }
+
+        if (attackerHealthChanged && this.battles.has(battle.room.id)) {
+            this.emitRoomAttackersSnapshot(battle);
         }
     }
 
@@ -281,6 +291,54 @@ export class CombatManager {
         );
     }
 
+    private createRoomAttackersSnapshot(
+        battle: RoomBattle,
+    ): RoomAttackersSnapshot {
+        const parties = [...battle.parties.values()].flatMap((participant) => {
+            const attackers = participant.presentation
+                .getLivingMembers()
+                .filter((adventurer) => adventurer.health > 0)
+                .map((adventurer) => ({
+                    id: adventurer.id,
+                    partyId: participant.party.id,
+                    waveNumber: participant.party.waveNumber,
+                    class: adventurer.class,
+                    level: adventurer.level,
+                    health: adventurer.health,
+                    maxHealth: adventurer.maxHealth,
+                    attack: adventurer.attack,
+                    defense: adventurer.defense,
+                }));
+
+            return attackers.length > 0
+                ? [
+                      {
+                          partyId: participant.party.id,
+                          waveNumber: participant.party.waveNumber,
+                          attackers,
+                      },
+                  ]
+                : [];
+        });
+
+        return {
+            roomId: battle.room.id,
+            active: true,
+            totalAttackers: parties.reduce(
+                (total, party) => total + party.attackers.length,
+                0,
+            ),
+            parties,
+        };
+    }
+
+    private emitRoomAttackersSnapshot(battle: RoomBattle): void {
+        EventBus.emit(
+            "room-attackers-changed",
+            this.createRoomAttackersSnapshot(battle),
+        );
+    }
+
     private finishBattle(
         battle: RoomBattle,
         fallbackOutcome: RoomCombatOutcome,
@@ -291,6 +349,12 @@ export class CombatManager {
             roomId: battle.room.id,
             active: false,
         });
+        EventBus.emit("room-attackers-changed", {
+            roomId: battle.room.id,
+            active: false,
+            totalAttackers: 0,
+            parties: [],
+        } satisfies RoomAttackersSnapshot);
 
         for (const participant of battle.parties.values()) {
             participant.presentation.setFighting(false);

@@ -8,6 +8,7 @@ import type { DungeonRoom } from "./game/components/mapComponents/DungeonRoom";
 import type { CardinalDirection } from "./game/components/mapComponents/DungeonRoom";
 import type { BuildableRoomType } from "./game/construction/DungeonConstruction";
 import { EventBus } from "./game/EventBus";
+import type { RoomAttackersSnapshot } from "./game/combat/CombatTypes";
 import type {
     DenizenRosterSnapshot,
     RoomPopulationSnapshot,
@@ -26,6 +27,7 @@ import type { WaveStatus } from "./game/waves/WaveManager";
 import type { ResourceSnapshot } from "./game/resources/ResourceManager";
 import { StatsPanel } from "./game/components/StatsPanel";
 import { DungeonCoreStatus } from "./game/components/DungeonCoreStatus";
+import { RoomAttackersPanel } from "./game/components/RoomAttackersPanel";
 import type { DungeonCoreSnapshot } from "./game/core/DungeonCoreManager";
 
 const INITIAL_STATUS: WaveStatus = {
@@ -121,6 +123,12 @@ function App() {
     const [focusedDenizenId, setFocusedDenizenId] = useState<string | null>(
         null,
     );
+    const [roomAttackers, setRoomAttackers] = useState<
+        Record<string, RoomAttackersSnapshot>
+    >({});
+    const [dismissedAttackerRoomId, setDismissedAttackerRoomId] = useState<
+        string | null
+    >(null);
 
     useEffect(() => {
         const handleStatus = (status: WaveStatus): void => setWave(status);
@@ -184,6 +192,26 @@ function App() {
     }, []);
 
     useEffect(() => {
+        const handleRoomAttackers = (snapshot: RoomAttackersSnapshot): void => {
+            setRoomAttackers((current) => {
+                if (!snapshot.active || snapshot.totalAttackers === 0) {
+                    if (!(snapshot.roomId in current)) return current;
+                    const next = { ...current };
+                    delete next[snapshot.roomId];
+                    return next;
+                }
+
+                return { ...current, [snapshot.roomId]: snapshot };
+            });
+        };
+
+        EventBus.on("room-attackers-changed", handleRoomAttackers);
+        return () => {
+            EventBus.off("room-attackers-changed", handleRoomAttackers);
+        };
+    }, []);
+
+    useEffect(() => {
         const handleDenizenSelected = (payload: {
             denizenId: string;
             roomId: string;
@@ -211,6 +239,15 @@ function App() {
                 dungeonSceneRef.current?.getRoomConstructionSnapshot(room.id) ??
                     null,
             );
+            const attackers =
+                dungeonSceneRef.current?.getRoomAttackers(room.id) ?? null;
+            if (attackers?.active && attackers.totalAttackers > 0) {
+                setRoomAttackers((current) => ({
+                    ...current,
+                    [room.id]: attackers,
+                }));
+            }
+            setDismissedAttackerRoomId(null);
             setPanelOpen(true);
             setActiveTab("room");
         };
@@ -275,6 +312,8 @@ function App() {
         setSelectedRoom(null);
         setConstruction(null);
         setFocusedDenizenId(null);
+        setRoomAttackers({});
+        setDismissedAttackerRoomId(null);
         setSceneReady(true);
     }, []);
     const getScene = (): DungeonScene | null => dungeonSceneRef.current;
@@ -363,6 +402,16 @@ function App() {
             ? "Start Wave"
             : "Next Wave";
 
+    const selectedRoomAttackers = selectedRoom
+        ? (roomAttackers[selectedRoom.room.id] ?? null)
+        : null;
+    const showSelectedRoomAttackers = Boolean(
+        selectedRoom &&
+            selectedRoomAttackers?.active &&
+            selectedRoomAttackers.totalAttackers > 0 &&
+            dismissedAttackerRoomId !== selectedRoom.room.id,
+    );
+
     return (
         <main className="game-shell-react">
             <div className="map-column">
@@ -415,6 +464,19 @@ function App() {
                         ref={phaserRef}
                         currentActiveScene={handleSceneReady}
                     />
+                    {showSelectedRoomAttackers &&
+                        selectedRoom &&
+                        selectedRoomAttackers && (
+                            <RoomAttackersPanel
+                                roomName={selectedRoom.room.name}
+                                snapshot={selectedRoomAttackers}
+                                onClose={() =>
+                                    setDismissedAttackerRoomId(
+                                        selectedRoom.room.id,
+                                    )
+                                }
+                            />
+                        )}
                     <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-5 flex items-center gap-2 rounded-lg border border-white/8 bg-[#0d0a11]/70 px-3 py-2 text-[10px] text-[#99919e] backdrop-blur-sm">
                         <span className="text-[#b991d1]">✥</span> Drag to pan{" "}
                         <i className="h-3 w-px bg-white/15" /> Scroll to zoom
