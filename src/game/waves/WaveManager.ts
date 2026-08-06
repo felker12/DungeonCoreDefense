@@ -102,7 +102,7 @@ export class WaveManager {
                 : createSeededRandom(options.seed);
         this.partySpawnInterval = options.partySpawnInterval ?? 1400;
         this.minPartySize = options.minPartySize ?? 1;
-        this.startingMaxPartySize = options.startingMaxPartySize ?? 3;
+        this.startingMaxPartySize = options.startingMaxPartySize ?? 2;
         this.maxPartySize = options.maxPartySize ?? 10;
         this.wavesPerPartySizeIncrease = options.wavesPerPartySizeIncrease ?? 5;
         this.startingWaveCapacity = options.startingWaveCapacity ?? 3;

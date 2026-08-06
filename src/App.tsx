@@ -56,9 +56,9 @@ const INITIAL_CORE: DungeonCoreSnapshot = {
 
 const INITIAL_RESOURCES: ResourceSnapshot = {
     resources: {
-        essence: { id: "essence", value: 148, capacity: 250 },
-        stone: { id: "stone", value: 72, capacity: 150 },
-        supplies: { id: "supplies", value: 34, capacity: 100 },
+        essence: { id: "essence", value: 150, capacity: 250 },
+        stone: { id: "stone", value: 75, capacity: 150 },
+        supplies: { id: "supplies", value: 50, capacity: 100 },
     },
     incomePerSecond: {
         essence: 0,
@@ -376,8 +376,7 @@ function App() {
             message: "The dungeon scene is not ready.",
         };
 
-    const resetSave = (): boolean =>
-        getScene()?.resetSavedGame() ?? false;
+    const resetSave = (): boolean => getScene()?.resetSavedGame() ?? false;
 
     const completedWaves = wave.completedWaves;
     const expansion = progression.nextExpansion;
@@ -412,9 +411,9 @@ function App() {
         : null;
     const showSelectedRoomAttackers = Boolean(
         selectedRoom &&
-            selectedRoomAttackers?.active &&
-            selectedRoomAttackers.totalAttackers > 0 &&
-            dismissedAttackerRoomId !== selectedRoom.room.id,
+        selectedRoomAttackers?.active &&
+        selectedRoomAttackers.totalAttackers > 0 &&
+        dismissedAttackerRoomId !== selectedRoom.room.id,
     );
 
     return (
@@ -518,7 +517,9 @@ function App() {
                                     <span className="shrink-0 text-[#8f61c8]">
                                         ◆
                                     </span>
-                                    <span className="truncate">Dungeon command</span>
+                                    <span className="truncate">
+                                        Dungeon command
+                                    </span>
                                     <span
                                         className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[8px] tracking-[.06em] ${saveStatus.hasSave ? "border-[#6f9f73]/28 bg-[#6f9f73]/9 text-[#91c796]" : "border-white/8 bg-white/3 text-[#716a75]"}`}
                                         title={
@@ -530,7 +531,9 @@ function App() {
                                         <i
                                             className={`size-1.5 rounded-full ${saveStatus.hasSave ? "bg-[#7fbd85] shadow-[0_0_7px_rgba(127,189,133,.65)]" : "bg-[#5d5661]"}`}
                                         />
-                                        {saveStatus.hasSave ? "Saved" : "No save"}
+                                        {saveStatus.hasSave
+                                            ? "Saved"
+                                            : "No save"}
                                     </span>
                                 </div>
 
@@ -774,3 +777,4 @@ function Metric({
         </div>
     );
 }
+

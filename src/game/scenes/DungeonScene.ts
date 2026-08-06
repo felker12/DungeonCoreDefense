@@ -232,8 +232,8 @@ export class DungeonScene extends Scene {
             this.coreManager?.getSnapshot() ?? {
                 health: 300,
                 maxHealth:
-                BASE_CORE_HEALTH +
-                (this.dungeonLevel - 1) * CORE_HEALTH_PER_LEVEL,
+                    BASE_CORE_HEALTH +
+                    (this.dungeonLevel - 1) * CORE_HEALTH_PER_LEVEL,
                 defense: 5,
                 state: "stable",
                 raidStartHealth: null,
@@ -482,9 +482,9 @@ export class DungeonScene extends Scene {
         this.combatManager = new CombatManager(this, this.roomPopulation);
         this.waveManager = new WaveManager(this, this.dungeon, {
             seed: 1337,
-            partySpawnInterval: 1400,
+            partySpawnInterval: 4000,
             minPartySize: 1,
-            startingMaxPartySize: 3,
+            startingMaxPartySize: 2,
             maxPartySize: 10,
             wavesPerPartySizeIncrease: 5,
             startingWaveCapacity: 3,
@@ -930,9 +930,17 @@ export class DungeonScene extends Scene {
             return false;
         }
 
-        const first = this.dungeon.rooms.find((room) => room.id === firstRoomId);
-        const second = this.dungeon.rooms.find((room) => room.id === secondRoomId);
-        if (!first || !second || !areRoomsConnectable(this.dungeon, first, second)) {
+        const first = this.dungeon.rooms.find(
+            (room) => room.id === firstRoomId,
+        );
+        const second = this.dungeon.rooms.find(
+            (room) => room.id === secondRoomId,
+        );
+        if (
+            !first ||
+            !second ||
+            !areRoomsConnectable(this.dungeon, first, second)
+        ) {
             return false;
         }
 
@@ -980,7 +988,10 @@ export class DungeonScene extends Scene {
         );
         if (connectionIndex < 0) return false;
 
-        const [connection] = this.dungeon.connections.splice(connectionIndex, 1);
+        const [connection] = this.dungeon.connections.splice(
+            connectionIndex,
+            1,
+        );
         this.mapView?.removeConnection(connection.id);
         this.refreshTopology();
         this.autosave();
@@ -1096,7 +1107,9 @@ export class DungeonScene extends Scene {
         roomId: EntityId,
         direction: CardinalDirection,
     ): boolean {
-        const room = this.dungeon.rooms.find((candidate) => candidate.id === roomId);
+        const room = this.dungeon.rooms.find(
+            (candidate) => candidate.id === roomId,
+        );
         if (!room) return false;
 
         return this.dungeon.connections.some((connection) => {
@@ -1149,7 +1162,10 @@ export class DungeonScene extends Scene {
     private restoreIdCounters(save: DungeonSaveData): void {
         this.nextRoomId = Math.max(
             save.counters.nextRoomId,
-            getNextNumericId(this.dungeon.rooms.map((room) => room.id), /^player-room-(\d+)$/),
+            getNextNumericId(
+                this.dungeon.rooms.map((room) => room.id),
+                /^player-room-(\d+)$/,
+            ),
         );
         this.nextConnectionId = Math.max(
             save.counters.nextConnectionId,
@@ -1203,3 +1219,4 @@ function getNextNumericId(ids: readonly EntityId[], pattern: RegExp): number {
     }
     return highest + 1;
 }
+
