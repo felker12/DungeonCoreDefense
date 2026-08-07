@@ -66,7 +66,7 @@ import type { AdventurerParty } from "../waves/PartyData";
 import { WaveManager, type WaveStatus } from "../waves/WaveManager";
 import { getAdventurerResourceDrop } from "../waves/AdventurerDefinitions";
 
-const EXPANSION_CAPACITY_REWARD = 2;
+const EXPANSION_CAPACITY_REWARD = 15;
 const BASE_CORE_HEALTH = 300;
 const CORE_HEALTH_PER_LEVEL = 75;
 const RESOURCE_CAPACITY_PER_LEVEL = {
@@ -478,7 +478,7 @@ export class DungeonScene extends Scene {
             gathererRecoveryMs: 20_000,
             defenderRecoveryMs: 12_000,
             baseProductionPerSecond: 1,
-            rosterCapacity: 8,
+            rosterCapacity: 20,
             initialState: loadedSave?.roomPopulation,
         });
         this.combatManager = new CombatManager(this, this.roomPopulation);
@@ -1232,4 +1232,3 @@ function getNextNumericId(ids: readonly EntityId[], pattern: RegExp): number {
     }
     return highest + 1;
 }
-

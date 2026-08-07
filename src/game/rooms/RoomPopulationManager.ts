@@ -67,7 +67,7 @@ export class RoomPopulationManager {
         this.gathererRecoveryMs = options.gathererRecoveryMs ?? 20_000;
         this.defenderRecoveryMs = options.defenderRecoveryMs ?? 12_000;
         this.baseProductionPerSecond = options.baseProductionPerSecond ?? 1;
-        this.rosterCapacity = options.rosterCapacity ?? 8;
+        this.rosterCapacity = options.rosterCapacity ?? 20;
 
         for (const room of dungeon.rooms) {
             const capacity = createInitialRoomCapacity(room);
@@ -178,13 +178,12 @@ export class RoomPopulationManager {
 
         return room.denizenIds
             .map((denizenId) => this.denizens.get(denizenId))
-            .filter(
-                (denizen): denizen is DenizenData =>
-                    Boolean(
-                        denizen &&
-                            denizen.status === DenizenStatus.ACTIVE &&
-                            denizen.health > 0,
-                    ),
+            .filter((denizen): denizen is DenizenData =>
+                Boolean(
+                    denizen &&
+                    denizen.status === DenizenStatus.ACTIVE &&
+                    denizen.health > 0,
+                ),
             )
             .map((denizen) => ({ ...denizen }));
     }
@@ -449,7 +448,9 @@ export class RoomPopulationManager {
         );
 
         for (const room of this.dungeon.rooms) {
-            const savedCapacity = cloneValidCapacity(state.capacities?.[room.id]);
+            const savedCapacity = cloneValidCapacity(
+                state.capacities?.[room.id],
+            );
             if (!savedCapacity) continue;
 
             this.capacities.set(room.id, savedCapacity);
@@ -458,7 +459,8 @@ export class RoomPopulationManager {
 
         this.denizens.clear();
         for (const savedDenizen of state.denizens ?? []) {
-            if (!savedDenizen?.id || this.denizens.has(savedDenizen.id)) continue;
+            if (!savedDenizen?.id || this.denizens.has(savedDenizen.id))
+                continue;
             this.denizens.set(savedDenizen.id, {
                 ...savedDenizen,
                 assignedRoomId: null,
@@ -474,7 +476,10 @@ export class RoomPopulationManager {
 
         for (const assignment of assignments) {
             const denizen = this.denizens.get(assignment.denizenId);
-            if (!denizen || !this.canAssignDenizen(denizen.id, assignment.roomId)) {
+            if (
+                !denizen ||
+                !this.canAssignDenizen(denizen.id, assignment.roomId)
+            ) {
                 continue;
             }
 

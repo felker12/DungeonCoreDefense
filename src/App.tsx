@@ -74,7 +74,7 @@ const INITIAL_RESOURCES: ResourceSnapshot = {
 
 const INITIAL_ROSTER: DenizenRosterSnapshot = {
     denizens: [],
-    capacity: 8,
+    capacity: 20,
 };
 
 const INITIAL_PROGRESSION: DungeonProgressionSnapshot = {
@@ -86,7 +86,7 @@ const INITIAL_PROGRESSION: DungeonProgressionSnapshot = {
             { resource: "stone", amount: 150 },
             { resource: "essence", amount: 50 },
         ],
-        denizenCapacityReward: 2,
+        denizenCapacityReward: 20,
         coreHealthReward: 75,
         resourceCapacityRewards: {
             essence: 75,
@@ -777,4 +777,3 @@ function Metric({
         </div>
     );
 }
-
