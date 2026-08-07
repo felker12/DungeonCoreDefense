@@ -48,13 +48,15 @@ export function DenizenPanel({
 
     useEffect(() => {
         if (!focusedDenizenId) return;
+
         const frame = requestAnimationFrame(() => {
             denizenCards.current
                 .get(focusedDenizenId)
                 ?.scrollIntoView({ behavior: "smooth", block: "center" });
         });
+
         return () => cancelAnimationFrame(frame);
-    }, [focusedDenizenId, roster.denizens]);
+    }, [focusedDenizenId]);
 
     return (
         <section aria-labelledby="denizen-roster-title">
@@ -139,8 +141,15 @@ export function DenizenPanel({
                                 <article
                                     key={denizen.id}
                                     ref={(node: HTMLElement | null) => {
-                                        if (node) denizenCards.current.set(denizen.id, node);
-                                        else denizenCards.current.delete(denizen.id);
+                                        if (node)
+                                            denizenCards.current.set(
+                                                denizen.id,
+                                                node,
+                                            );
+                                        else
+                                            denizenCards.current.delete(
+                                                denizen.id,
+                                            );
                                     }}
                                     className={`rounded-xl border p-3 transition ${
                                         focusedDenizenId === denizen.id
@@ -155,11 +164,19 @@ export function DenizenPanel({
                                                 {getRoleLabel(denizen)}
                                             </strong>
                                             <p className="mt-1 mb-0 text-[9px] text-[#8f8597]">
-                                                HP {Math.ceil(denizen.health)} / {denizen.maxHealth} · ATK {denizen.attack} · DEF {denizen.defense}
+                                                HP {Math.ceil(denizen.health)} /{" "}
+                                                {denizen.maxHealth} · ATK{" "}
+                                                {denizen.attack} · DEF{" "}
+                                                {denizen.defense}
                                             </p>
-                                            {denizen.role === DenizenRole.GATHERER && (
+                                            {denizen.role ===
+                                                DenizenRole.GATHERER && (
                                                 <p className="mt-1 mb-0 text-[9px] text-[#7f9c87]">
-                                                    Production +{denizen.gatheringPower.toFixed(1)}/sec
+                                                    Production +
+                                                    {denizen.gatheringPower.toFixed(
+                                                        1,
+                                                    )}
+                                                    /sec
                                                 </p>
                                             )}
                                         </div>
@@ -177,7 +194,9 @@ export function DenizenPanel({
                                             className={`h-full rounded-full transition-[width] duration-200 ${
                                                 denizen.health <= 0
                                                     ? "bg-[#8a4650]"
-                                                    : denizen.health / denizen.maxHealth <= 0.35
+                                                    : denizen.health /
+                                                            denizen.maxHealth <=
+                                                        0.35
                                                       ? "bg-[#d46550]"
                                                       : "bg-linear-to-r from-[#7d4ca6] to-[#b47ad5]"
                                             }`}
@@ -188,7 +207,12 @@ export function DenizenPanel({
                                     </div>
                                     {denizen.recoveryRemainingMs > 0 && (
                                         <p className="mt-1.5 mb-0 text-[8px] font-bold text-[#c47d76] uppercase">
-                                            Recovering · {Math.ceil(denizen.recoveryRemainingMs / 1000)}s
+                                            Recovering ·{" "}
+                                            {Math.ceil(
+                                                denizen.recoveryRemainingMs /
+                                                    1000,
+                                            )}
+                                            s
                                         </p>
                                     )}
 
@@ -212,7 +236,9 @@ export function DenizenPanel({
                                                     assignmentLocked ||
                                                     availableRooms.length === 0
                                                 }
-                                                onChange={(event: { target: { value: string } }) =>
+                                                onChange={(event: {
+                                                    target: { value: string };
+                                                }) =>
                                                     setSelectedRooms(
                                                         (current) => ({
                                                             ...current,
