@@ -48,15 +48,13 @@ export function DenizenPanel({
 
     useEffect(() => {
         if (!focusedDenizenId) return;
-
         const frame = requestAnimationFrame(() => {
             denizenCards.current
                 .get(focusedDenizenId)
                 ?.scrollIntoView({ behavior: "smooth", block: "center" });
         });
-
         return () => cancelAnimationFrame(frame);
-    }, [focusedDenizenId]);
+    }, [focusedDenizenId, roster.denizens]);
 
     return (
         <section aria-labelledby="denizen-roster-title">
@@ -93,13 +91,19 @@ export function DenizenPanel({
                     <RecruitCard
                         key={`${offer.role}-${offer.type}`}
                         offer={offer}
-                        disabled={full || resources.supplies.value < offer.cost}
+                        disabled={
+                            assignmentLocked ||
+                            full ||
+                            resources.supplies.value < offer.cost
+                        }
                         reason={
-                            full
-                                ? "Roster full"
-                                : resources.supplies.value < offer.cost
-                                  ? "Need more supplies"
-                                  : null
+                            assignmentLocked
+                                ? "Unavailable during raids"
+                                : full
+                                  ? "Roster full"
+                                  : resources.supplies.value < offer.cost
+                                    ? "Need more supplies"
+                                    : null
                         }
                         onRecruit={() => onRecruit(offer.type)}
                     />
